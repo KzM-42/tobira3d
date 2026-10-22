@@ -1,4 +1,4 @@
-// 入力：PC は WASD + マウス（Pointer Lock）+ Shift + E/クリック。スマホは仮想スティック + 右側ドラッグ + タップ。
+// 入力：PC は WASD + マウスのドラッグで視点（カーソルは固定しない）+ Shift + E/クリック。スマホは仮想スティック + 右側ドラッグ + タップ。
 export interface InputFrame {
   mx: number; mz: number;     // 移動（右, 前）-1..1
   run: boolean;
@@ -9,8 +9,8 @@ export interface InputFrame {
 
 export class Input {
   readonly touch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
-  locked = false;
-  sensitivity = 0.0022;
+  sensitivity = 0.0030;
+  private drag: { moved: number; t0: number } | null = null;
   private keys = new Set<string>();
   private lookX = 0; private lookY = 0;
   private wantInteract = false;
@@ -18,7 +18,6 @@ export class Input {
   private stick = { id: -1, ox: 0, oy: 0, x: 0, y: 0 };
   private look = { id: -1, lx: 0, ly: 0, sx: 0, sy: 0, t0: 0, moved: 0 };
   enabled = false;
-  onLockChange: (locked: boolean) => void = () => {};
   private ac = new AbortController();
 
   constructor(private el: HTMLElement, private stickEl: HTMLElement, private knobEl: HTMLElement) {
@@ -31,30 +30,29 @@ export class Input {
     }, sig);
     addEventListener("keyup", e => this.keys.delete(e.code), sig);
     addEventListener("blur", () => this.keys.clear(), sig);
-    document.addEventListener("pointerlockchange", () => {
-      this.locked = document.pointerLockElement === this.el;
-      if (!this.locked) this.keys.clear();
-      this.onLockChange(this.locked);
-    }, sig);
-    el.addEventListener("mousemove", e => {
-      if (!this.locked || !this.enabled) return;
-      this.lookX -= e.movementX * this.sensitivity; this.lookY -= e.movementY * this.sensitivity;
-    }, sig);
+    // マウス：カーソルは固定しない。左ボタンを押したままドラッグで見回し、動かさずに離すと調べる。
     el.addEventListener("mousedown", e => {
-      if (this.touch || !this.enabled) return;
-      if (!this.locked) { this.lock(); return; }
-      if (e.button === 0) this.wantInteract = true;
+      if (this.touch || !this.enabled || e.button !== 0) return;
+      this.drag = { moved: 0, t0: performance.now() };
     }, sig);
+    addEventListener("mousemove", e => {
+      if (!this.drag || !this.enabled) return;
+      this.lookX -= e.movementX * this.sensitivity; this.lookY -= e.movementY * this.sensitivity;
+      this.drag.moved += Math.abs(e.movementX) + Math.abs(e.movementY);
+    }, sig);
+    addEventListener("mouseup", e => {
+      if (!this.drag || e.button !== 0) return;
+      if (this.enabled && this.drag.moved < 6 && performance.now() - this.drag.t0 < 350) this.wantInteract = true;
+      this.drag = null;
+    }, sig);
+    addEventListener("blur", () => { this.drag = null; }, sig);
     el.addEventListener("touchstart", e => this.onTouch(e, "start"), { passive: false, signal: this.ac.signal });
     el.addEventListener("touchmove", e => this.onTouch(e, "move"), { passive: false, signal: this.ac.signal });
     el.addEventListener("touchend", e => this.onTouch(e, "end"), { passive: false, signal: this.ac.signal });
     el.addEventListener("touchcancel", e => this.onTouch(e, "end"), { passive: false, signal: this.ac.signal });
   }
 
-  dispose() { this.ac.abort(); this.unlock(); }
-
-  lock() { if (!this.touch) (this.el.requestPointerLock as any)?.call(this.el)?.catch?.(() => {}); }
-  unlock() { if (document.pointerLockElement) document.exitPointerLock(); }
+  dispose() { this.ac.abort(); }
 
   private onTouch(e: TouchEvent, phase: "start" | "move" | "end") {
     if (!this.enabled) return;
