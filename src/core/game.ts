@@ -9,7 +9,9 @@ export const PASS = { approachEnd: 20, openStart: 8, openEnd: 30, walkEnd: 58, c
 export const ENTER = { openStart: 4, openEnd: 26, walkStart: 10, walkEnd: 48, closeStart: 50, closeEnd: 62, end: 52 };
 export const BLACKOUT = 60;
 
-export type Mode = "idle" | "entering" | "room" | "passing" | "blackout" | "clear";
+export type Mode = "idle" | "entering" | "room" | "passing" | "blackout" | "clear" | "over";
+/** normal：第1〜5室を抜ければクリア、失敗したら新しいシードで第1室から。endless：どこまでも続き、失敗したら終わり */
+export type RunMode = "normal" | "endless";
 
 export type GameEvent =
   | { type: "enter"; room: number; fail: boolean }
@@ -17,13 +19,14 @@ export type GameEvent =
   | { type: "blackout" }
   | { type: "interact"; id: string }
   | { type: "control" }
-  | { type: "clear"; ms: number };
+  | { type: "clear"; ms: number }
+  | { type: "over"; room: number };
 
 export interface FailNote { room: number; name: string; reason: string }
 export interface Outcome { room: number; ok: boolean; reason: string | null; door: number }
 
 export interface GameOpts {
-  /** 部屋の数（ここを越えるとクリア） */
+  /** 通常モードの部屋の数（ここを越えるとクリア） */
   length: number;
 }
 
@@ -31,6 +34,7 @@ export class Game {
   mode: Mode = "idle";
   /** この挑戦のシード（失敗して第1室に戻るたびに変わる） */
   seed = 1;
+  run: RunMode = "normal";
   room!: RoomDef;
   ri = 0;
   k = 0;
@@ -53,9 +57,13 @@ export class Game {
     return { t: this.t, k: this.k, px: this.px, pz: this.pz, sx, sz };
   }
 
-  start(seed: number) {
+  /** この挑戦の部屋数（無限モードは上限なし） */
+  get length() { return this.run === "endless" ? Infinity : this.opts.length; }
+
+  start(seed: number, run: RunMode = "normal") {
     this.rec.attempts++; this.save(this.rec);
     this.seed = seed >>> 0 || 1;
+    this.run = run;
     this.failNote = null; this.last = null; this.runK = 0;
     this.enter(0, false);
   }
@@ -70,7 +78,9 @@ export class Game {
     this.k = 0; this.enterK = 0; this.pass = null;
     [this.px, this.pz] = spawnOf(this.room.shell);
     this.mode = "entering";
-    if (i + 1 > this.rec.best) { this.rec.best = i + 1; this.save(this.rec); }
+    if (this.run === "endless") {
+      if (i + 1 > this.rec.endless.best) { this.rec.endless = { best: i + 1, seed: this.seed }; this.save(this.rec); }
+    } else if (i + 1 > this.rec.best) { this.rec.best = i + 1; this.save(this.rec); }
     this.events.push({ type: "enter", room: i, fail });
   }
 
@@ -128,13 +138,17 @@ export class Game {
   private resolve() {
     const p = this.pass!, from = this.ri;
     this.last = { room: from, ok: !p.reason, reason: p.reason, door: p.door };
-    if (p.reason) {
+    if (p.reason && this.run === "endless") {
+      this.failNote = { room: from, name: this.room.name, reason: p.reason };
+      this.mode = "over";
+      this.events.push({ type: "over", room: from });
+    } else if (p.reason) {
       this.failNote = { room: from, name: this.room.name, reason: p.reason };
       this.rec.attempts++; this.save(this.rec);
       this.runK = 0;
       this.seed = nextSeed(this.seed, this.rec.attempts);
       this.enter(0, true);
-    } else if (from + 1 >= this.opts.length) {
+    } else if (from + 1 >= this.length) {
       this.mode = "clear";
       this.clearMs = Math.round((this.runK / HZ) * 1000);
       const key = String(this.opts.length), prev = this.rec.bestTime[key];

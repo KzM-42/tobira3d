@@ -6,15 +6,15 @@ import { join } from "node:path";
 import { Game, HZ, PASS, ENTER } from "../src/core/game";
 import { emptyRecords } from "../src/core/records";
 import { playRoom } from "../src/core/replay";
-import { makeRoom, NORMAL_ROOMS } from "../src/rooms/index";
+import { kindAt, levelOf, makeRoom, NORMAL_ROOMS } from "../src/rooms/index";
 import { spawnOf, type RoomDef } from "../src/core/types";
 import { hash32, mulberry32, nextSeed, parseSeed, Rng } from "../src/core/rng";
 
 const SEEDS = Array.from({ length: 200 }, (_, i) => i + 1);
 const fresh = () => new Game(makeRoom, { length: NORMAL_ROOMS }, emptyRecords());
 /** seed の i 番目の部屋に直接入った状態の Game（テスト専用） */
-function at(seed: number, i: number) {
-  const g = fresh(); g.start(seed);
+function at(seed: number, i: number, run: "normal" | "endless" = "normal") {
+  const g = fresh(); g.start(seed, run);
   if (i > 0) g.debugJump(i);
   return g;
 }
@@ -34,8 +34,11 @@ test("乱数：同じシードなら同じ列、違うシードなら違う列",
   assert.equal(parseSeed("123"), 123); assert.equal(parseSeed("abc"), null); assert.equal(parseSeed("0"), null); assert.equal(parseSeed(null), null);
 });
 
-test("部屋データの形（シード1〜200）", () => {
-  for (const seed of SEEDS) for (let i = 0; i < NORMAL_ROOMS; i++) {
+/** 確かめる部屋：第1〜5室と、無限モードで生成される第6〜20室 */
+const CHECK_ROOMS = 20;
+
+test("部屋データの形（シード1〜200・第1〜20室）", () => {
+  for (const seed of SEEDS) for (let i = 0; i < CHECK_ROOMS; i++) {
     const r = makeRoom({ seed, index: i, heat: 0 });
     const tag = `seed${seed} 第${i + 1}室 ${r.name}`;
     assert.ok(r.doors.length >= 2 && r.doors.length <= 5, `${tag} 扉の数`);
@@ -60,9 +63,8 @@ test("同じシードで2回作ると完全に一致し、シードが違えば�
   }
 });
 
-for (let i = 0; i < NORMAL_ROOMS; i++) {
-  test(`第${i + 1}室 シード1〜200：正解の扉だけが通れる・誤操作は失敗する・放置は時間切れ`, () => {
-    for (const seed of SEEDS) {
+/** 1部屋ぶんの検査：正解の扉だけが通れる・誤操作は失敗する */
+function checkRoom(seed: number, i: number, timeout: boolean) {
       const r = makeRoom({ seed, index: i, heat: 0 }), tag = `seed${seed} 第${i + 1}室「${r.name}」`;
       let ok = 0;
       for (let d = 0; d < r.doors.length; d++) {
@@ -77,14 +79,71 @@ for (let i = 0; i < NORMAL_ROOMS; i++) {
         const res = playRoom(at(seed, i), w);
         assert.ok(res && !res.ok, `${tag} 誤操作${j + 1} が通れてしまう`);
       });
-      if (seed <= 20) {
+      if (timeout) {
         const g = at(seed, i), res = playRoom(g, [], r.limit + 5);
         assert.ok(res && !res.ok && /時間切れ/.test(res.reason!), `${tag} 時間切れ`);
         assert.equal(g.ri, 0);
       }
-    }
+}
+
+for (let i = 0; i < NORMAL_ROOMS; i++) {
+  test(`第${i + 1}室 シード1〜200：正解の扉だけが通れる・誤操作は失敗する・放置は時間切れ`, () => {
+    for (const seed of SEEDS) checkRoom(seed, i, seed <= 20);
   });
 }
+
+test(`無限モードの第6〜${CHECK_ROOMS}室 シード1〜200：正解の扉だけが通れる・誤操作は失敗する`, () => {
+  for (const seed of SEEDS) for (let i = NORMAL_ROOMS; i < CHECK_ROOMS; i++) checkRoom(seed, i, seed <= 5);
+});
+
+test("無限モード：種類の並びはシードで変わり、同じ種類は続かず、全種類が出る", () => {
+  const orders = new Set<string>();
+  for (const seed of SEEDS) {
+    const ks = Array.from({ length: 60 }, (_, i) => kindAt(seed, i));
+    for (let i = 1; i < ks.length; i++) assert.notEqual(ks[i], ks[i - 1], `seed${seed} 第${i + 1}室が前と同じ種類`);
+    assert.equal(new Set(ks.slice(NORMAL_ROOMS)).size, 5, `seed${seed} 全種類が出る`);
+    assert.deepEqual(ks.slice(0, NORMAL_ROOMS), ["light", "sound", "wait", "count", "blackout"]);
+    orders.add(ks.slice(NORMAL_ROOMS, 20).join());
+    assert.equal(makeRoom({ seed, index: 40, heat: 0 }).kind, kindAt(seed, 40));
+  }
+  assert.ok(orders.size > 150, "並びがシードごとに変わる");
+});
+
+test("無限モード：室数に応じて少しずつ難しくなる", () => {
+  for (let i = 1; i < 60; i++) assert.ok(levelOf(i, 0) >= levelOf(i - 1, 0));
+  assert.equal(levelOf(0, 0), 0); assert.equal(levelOf(NORMAL_ROOMS - 1, 0), 0);
+  assert.ok(levelOf(29, 0) >= 5);
+  // 第1室（3枚・ともる扉）と、深い部屋のホテル（4枚・消えた扉も出る）
+  const deep = SEEDS.flatMap(seed => Array.from({ length: 30 }, (_, i) => makeRoom({ seed, index: i + 20, heat: 0 }))).filter(r => r.kind === "light");
+  assert.ok(deep.length > 0 && deep.every(r => r.doors.length === 4));
+  assert.ok(deep.some(r => r.spec.unlit) && deep.some(r => !r.spec.unlit));
+  assert.ok(SEEDS.every(seed => makeRoom({ seed, index: 0, heat: 0 }).doors.length === 3));
+});
+
+test("無限モード：シード40個で第30室まで自動で踏破できる", () => {
+  for (const seed of SEEDS.slice(0, 40)) {
+    const g = fresh(); g.start(seed, "endless");
+    for (let i = 0; i < 30; i++) {
+      assert.equal(g.ri, i);
+      const res = playRoom(g, g.room.solution);
+      assert.ok(res?.ok, `seed${seed} 第${i + 1}室 ${g.room.name}: ${res?.reason}`);
+    }
+    assert.equal(g.ri, 30); assert.equal(g.mode === "entering" || g.mode === "room", true, "第31室へ続く");
+    assert.equal(g.rec.endless.best, 31); assert.equal(g.rec.endless.seed, seed);
+  }
+});
+
+test("無限モード：失敗したら終わり（第1室には戻らず、記録とシードが残る）", () => {
+  const g = fresh(); g.start(123, "endless");
+  for (let i = 0; i < 7; i++) playRoom(g, g.room.solution);
+  const r = g.room, res = playRoom(g, withDoor(r, (r.answer + 1) % r.doors.length));
+  assert.ok(res && !res.ok);
+  assert.equal(g.mode, "over"); assert.equal(g.ri, 7); assert.equal(g.seed, 123);
+  assert.equal(g.failNote?.room, 7);
+  assert.deepEqual(g.rec.endless, { best: 8, seed: 123 });
+  assert.equal(g.rec.best, 0, "通常モードの記録とは別");
+  g.step(0, 0); assert.equal(g.mode, "over");
+});
 
 test("全部屋を一度も失敗せず通すとクリア・最短タイムが残る（シード1〜200）", () => {
   for (const seed of SEEDS) {

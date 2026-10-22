@@ -69,3 +69,9 @@ body:not(.touchdev) .controls.touch { display: none; }
 /* シードの表示 */
 .seed { margin: 0; font-size: 11px; letter-spacing: .15em; color: #6a645a; font-family: "Hiragino Sans", "Yu Gothic", sans-serif; }
 .seed b { font-weight: 500; color: var(--dim); font-variant-numeric: tabular-nums; letter-spacing: .05em; }
+.rec.four { grid-template-columns: repeat(4, 1fr); }
+.rec.four b { font-size: 19px; }
+.starts { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+.btn.alt { background: transparent; color: var(--amber); border: 1px solid rgba(232,180,110,.6); box-shadow: 0 0 24px rgba(232,180,110,.12); letter-spacing: .25em; padding: 12px 26px 12px 30px; }
+.modes { margin: 0; font-size: 12px; line-height: 1.8; color: var(--dim); }
+@media (max-width: 420px) { .rec.four { grid-template-columns: repeat(2, 1fr); } }

@@ -1,4 +1,5 @@
 import { App, type QualitySetting } from "./engine/app";
+import type { RunMode } from "./core/game";
 import { makeRoom, NORMAL_ROOMS } from "./rooms/index";
 import { fmtMs } from "./core/records";
 import { parseSeed } from "./core/rng";
@@ -8,6 +9,7 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 const app = new App($<HTMLCanvasElement>("gl"), {
   crosshair: $("crosshair"), roomTag: $("roomTag"), failLine: $("failLine"), timer: $("timer"), toast: $("toast"),
   onClear: ms => showClear(ms),
+  onOver: room => showOver(room),
   onPauseChange: p => { $("pause").hidden = !p; $("seedPause").textContent = String(app.game.seed); if (p) setTimeout(() => $("resumeBtn").focus(), 0); },
 }, makeRoom, { length: NORMAL_ROOMS }, $("stick"), $("knob"));
 
@@ -29,6 +31,8 @@ function showTitle() {
   $("recTries").textContent = String(r.attempts);
   const bt = r.bestTime[String(NORMAL_ROOMS)];
   $("recTime").textContent = bt ? fmtMs(bt) : "—";
+  $("recEndless").textContent = r.endless.best ? `第${r.endless.best}室` : "—";
+  $("endlessSeed").textContent = r.endless.best ? ` ／ 無限の最高はシード ${r.endless.seed}（?seed=${r.endless.seed}）` : "";
   titleSeed = rollSeed();
   $("seedTitle").textContent = String(titleSeed);
   if (loaded) app.showcase(titleSeed);
@@ -36,6 +40,8 @@ function showTitle() {
 let loaded = false;
 
 function showClear(ms: number) {
+  $("clearKicker").textContent = "ESCAPED";
+  $("clrTimeL").textContent = "今回"; $("clrBestL").textContent = "最短"; $("clrTriesL").textContent = "挑戦回数";
   $("clearTitle").textContent = "外に出た";
   $("clearStory").innerHTML = `最後の扉の向こうは、朝だった。<br><span class="seed">シード ${app.game.seed}</span>`;
   $("clrTime").textContent = fmtMs(ms);
@@ -46,10 +52,30 @@ function showClear(ms: number) {
   setTimeout(() => $("againBtn").focus(), 0);
 }
 
-function begin() {
+/** 無限モードの終わり */
+function showOver(room: number) {
+  const f = app.game.failNote, e = app.rec.endless;
+  $("clearKicker").textContent = "LOST";
+  $("clearTitle").textContent = `第${room + 1}室で途切れた`;
+  $("clearStory").innerHTML = "";
+  if (f) $("clearStory").append(`✕「${f.name}」 ${f.reason}`, document.createElement("br"));
+  const seed = document.createElement("span"); seed.className = "seed"; seed.textContent = `シード ${app.game.seed}`;
+  $("clearStory").append(seed);
+  $("clrTimeL").textContent = "越えた部屋"; $("clrBestL").textContent = "無限 最高"; $("clrTriesL").textContent = "最高のシード";
+  $("clrTime").textContent = String(room);
+  $("clrBest").textContent = `第${e.best}室`;
+  $("clrTries").textContent = String(e.seed);
+  $("clear").hidden = false;
+  document.body.classList.add("playing-off");
+  setTimeout(() => $("againBtn").focus(), 0);
+}
+
+let run: RunMode = "normal";
+function begin(mode: RunMode = run) {
+  run = mode;
   $("title").hidden = true; $("clear").hidden = true; $("pause").hidden = true;
   document.body.classList.remove("playing-off");
-  app.start(titleSeed);
+  app.start(titleSeed, run);
 }
 
 /* ---------- 設定 ---------- */
@@ -91,7 +117,8 @@ addEventListener("keydown", e => {
 }, sig);
 
 /* ---------- 画面遷移 ---------- */
-$("startBtn").onclick = begin;
+$("startBtn").onclick = () => begin("normal");
+$("endlessBtn").onclick = () => begin("endless");
 $("againBtn").onclick = () => { titleSeed = rollSeed(); begin(); };
 $("toTitleBtn").onclick = showTitle;
 $("resumeBtn").onclick = () => app.setPaused(false);
@@ -104,6 +131,7 @@ showTitle();
 app.mats.preload(p => { ($("startBtn") as HTMLButtonElement).textContent = `読み込み中… ${Math.round(p * 100)}%`; }).then(() => {
   const b = $("startBtn") as HTMLButtonElement;
   b.disabled = false; b.textContent = "はいる"; b.focus();
+  ($("endlessBtn") as HTMLButtonElement).disabled = false;
   loaded = true;
   if (!app.running) app.showcase(titleSeed);
 });

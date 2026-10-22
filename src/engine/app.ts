@@ -1,6 +1,6 @@
 // エンジン本体：固定ステップのループ、部屋の読み込みと破棄、扉を通る演出、調べる、HUD。
 import * as THREE from "three";
-import { Game, HZ, PASS, ENTER, BLACKOUT, type GameOpts } from "../core/game";
+import { Game, HZ, PASS, ENTER, BLACKOUT, type GameOpts, type RunMode } from "../core/game";
 import { loadRecords, saveRecords, type Records } from "../core/records";
 import { spawnOf, type Floor, type RoomDef, type RoomGen } from "../core/types";
 import { View } from "./view";
@@ -19,7 +19,7 @@ const angLerp = (a: number, b: number, t: number) => { let d = (b - a) % (Math.P
 
 export interface UI {
   crosshair: HTMLElement; roomTag: HTMLElement; failLine: HTMLElement; timer: HTMLElement; toast: HTMLElement;
-  onClear(ms: number): void; onPauseChange(paused: boolean): void;
+  onClear(ms: number): void; onOver(room: number): void; onPauseChange(paused: boolean): void;
 }
 
 export type QualitySetting = Quality | "auto";
@@ -87,7 +87,7 @@ export class App {
   }
 
   /* ---------------- 進行 ---------------- */
-  start(seed: number) {
+  start(seed: number, run: RunMode = "normal") {
     this.audio.init();
     clearTimeout(this.quietTimer);
     this.audio.setRunning(true);
@@ -96,7 +96,7 @@ export class App {
     this.input.enabled = true;
     this.showcaseOn = false;
     this.game = new Game(this.gen, this.opts, this.rec, saveRecords);
-    this.game.start(seed);
+    this.game.start(seed, run);
     this.handleEvents();
     this.input.lock();
   }
@@ -179,10 +179,12 @@ export class App {
           break;
         }
         case "clear":
+        case "over":
           this.running = false; this.input.enabled = false; this.input.unlock();
           this.audio.setAmbient(false);
           this.quietTimer = window.setTimeout(() => { if (!this.running) this.audio.setRunning(false); }, 2500);
-          this.ui.onClear(e.ms);
+          if (e.type === "clear") this.ui.onClear(e.ms);
+          else { this.audio.play("fail"); this.ui.onOver(e.room); }
           break;
       }
     }
@@ -279,7 +281,7 @@ export class App {
       cam.rotation.set(-0.02 + Math.sin(this.time * 0.17) * 0.015, Math.sin(this.time * 0.09) * 0.12, 0, "YXZ");
       return;
     }
-    if (!this.kit || g.mode === "idle" || g.mode === "clear") return;
+    if (!this.kit || g.mode === "idle" || g.mode === "clear" || g.mode === "over") return;
     if (g.mode === "passing" && this.passDoor) {
       const k = g.pass!.k + alpha;
       const startZ = -PASSAGE_L - 0.75, endZ = -1.2;

@@ -2,11 +2,12 @@ export interface Records {
   best: number;                       // 到達した最高の部屋番号
   attempts: number;                   // 挑戦回数
   bestTime: Record<string, number>;   // 部屋数ごとの最短踏破タイム(ms)
+  endless: { best: number; seed: number }; // 無限モードの最高到達室数と、その時のシード
 }
 
 const KEY = "tobira3d:records";
 
-export function emptyRecords(): Records { return { best: 0, attempts: 0, bestTime: {} }; }
+export function emptyRecords(): Records { return { best: 0, attempts: 0, bestTime: {}, endless: { best: 0, seed: 0 } }; }
 
 export function loadRecords(): Records {
   try { return Object.assign(emptyRecords(), JSON.parse(localStorage.getItem(KEY) || "{}")); }

@@ -29,12 +29,17 @@
       <p class="kicker">THE DOORS SAY NOTHING</p>
       <h1>扉は<br />何も言わない</h1>
       <p class="story">気がつくと、知らない建物の中にいた。<br />部屋ごとに一つ、言いつけがある。<br />扉は正解を教えてくれない。間違えれば、最初の部屋から。</p>
-      <div class="rec">
+      <div class="rec four">
         <div><b id="recBest">—</b><span>最高到達</span></div>
-        <div><b id="recTries">0</b><span>挑戦回数</span></div>
         <div><b id="recTime">—</b><span>最短踏破</span></div>
+        <div><b id="recEndless">—</b><span>無限 最高</span></div>
+        <div><b id="recTries">0</b><span>挑戦回数</span></div>
       </div>
-      <button id="startBtn" class="btn" disabled>読み込み中…</button>
+      <div class="starts">
+        <button id="startBtn" class="btn" disabled>読み込み中…</button>
+        <button id="endlessBtn" class="btn alt" disabled>無限モード</button>
+      </div>
+      <p class="modes">はいる：第1〜5室を抜ければ外へ。失敗すると新しい部屋で第1室から<br />無限モード：部屋はどこまでも続く。一度でも間違えれば終わり</p>
       <div class="opts">
         <label>画質
           <select id="quality">
@@ -49,7 +54,7 @@
       </div>
       <p class="controls pc">WASD 移動 ／ マウス 視点 ／ Shift 走る ／ クリック・E 調べる・扉を開ける ／ Esc 一時停止</p>
       <p class="controls touch">左下 移動（大きく倒すと走る） ／ 右側ドラッグ 視点 ／ タップ 調べる・扉を開ける</p>
-      <p class="seed">シード <b id="seedTitle">—</b></p>
+      <p class="seed">シード <b id="seedTitle">—</b><span id="endlessSeed"></span></p>
       <p class="note">ヘッドホン推奨</p>
     </div>
   </section>
@@ -78,13 +83,13 @@
 
   <section id="clear" class="screen" hidden>
     <div class="inner">
-      <p class="kicker">ESCAPED</p>
+      <p class="kicker" id="clearKicker">ESCAPED</p>
       <h1 id="clearTitle">外に出た</h1>
       <p class="story" id="clearStory"></p>
       <div class="rec">
-        <div><b id="clrTime">—</b><span>今回</span></div>
-        <div><b id="clrBest">—</b><span>最短</span></div>
-        <div><b id="clrTries">0</b><span>挑戦回数</span></div>
+        <div><b id="clrTime">—</b><span id="clrTimeL">今回</span></div>
+        <div><b id="clrBest">—</b><span id="clrBestL">最短</span></div>
+        <div><b id="clrTries">0</b><span id="clrTriesL">挑戦回数</span></div>
       </div>
       <button id="againBtn" class="btn">もう一度</button>
       <button id="toTitleBtn" class="ghost">タイトルへ</button>
