@@ -1,6 +1,7 @@
 // ゲーム進行の本体（three.js 非依存）。固定タイムステップ 60Hz で step() を呼ぶ。
-import { spawnOf, type Ctx, type RoomDef } from "./types";
+import { spawnOf, type Ctx, type RoomDef, type RoomGen } from "./types";
 import type { Records } from "./records";
+import { nextSeed } from "./rng";
 
 export const HZ = 60;
 /** 扉を通る演出のタイムライン（ステップ数）。正解・不正解で完全に同一 */
@@ -21,8 +22,16 @@ export type GameEvent =
 export interface FailNote { room: number; name: string; reason: string }
 export interface Outcome { room: number; ok: boolean; reason: string | null; door: number }
 
+export interface GameOpts {
+  /** 部屋の数（ここを越えるとクリア） */
+  length: number;
+}
+
 export class Game {
   mode: Mode = "idle";
+  /** この挑戦のシード（失敗して第1室に戻るたびに変わる） */
+  seed = 1;
+  room!: RoomDef;
   ri = 0;
   k = 0;
   s: any = null;
@@ -36,23 +45,27 @@ export class Game {
   px = 0;
   pz = 0;
 
-  constructor(readonly rooms: RoomDef[], readonly rec: Records, private save: (r: Records) => void = () => {}) {}
+  constructor(readonly gen: RoomGen, readonly opts: GameOpts, readonly rec: Records, private save: (r: Records) => void = () => {}) {}
 
-  get room() { return this.rooms[this.ri]; }
   get t() { return this.k / HZ; }
   ctx(): Ctx {
     const [sx, sz] = spawnOf(this.room.shell);
     return { t: this.t, k: this.k, px: this.px, pz: this.pz, sx, sz };
   }
 
-  start() {
+  start(seed: number) {
     this.rec.attempts++; this.save(this.rec);
+    this.seed = seed >>> 0 || 1;
     this.failNote = null; this.last = null; this.runK = 0;
     this.enter(0, false);
   }
 
+  /** i 番目の部屋をシードから作る */
+  roomAt(i: number) { return this.gen({ seed: this.seed, index: i, heat: 0 }); }
+
   private enter(i: number, fail: boolean) {
     this.ri = i;
+    this.room = this.roomAt(i);
     this.s = this.room.logic.init();
     this.k = 0; this.enterK = 0; this.pass = null;
     [this.px, this.pz] = spawnOf(this.room.shell);
@@ -116,14 +129,15 @@ export class Game {
     const p = this.pass!, from = this.ri;
     this.last = { room: from, ok: !p.reason, reason: p.reason, door: p.door };
     if (p.reason) {
-      this.failNote = { room: from, name: this.rooms[from].name, reason: p.reason };
+      this.failNote = { room: from, name: this.room.name, reason: p.reason };
       this.rec.attempts++; this.save(this.rec);
       this.runK = 0;
+      this.seed = nextSeed(this.seed, this.rec.attempts);
       this.enter(0, true);
-    } else if (from + 1 >= this.rooms.length) {
+    } else if (from + 1 >= this.opts.length) {
       this.mode = "clear";
       this.clearMs = Math.round((this.runK / HZ) * 1000);
-      const key = String(this.rooms.length), prev = this.rec.bestTime[key];
+      const key = String(this.opts.length), prev = this.rec.bestTime[key];
       if (!prev || this.clearMs < prev) this.rec.bestTime[key] = this.clearMs;
       this.save(this.rec);
       this.events.push({ type: "clear", ms: this.clearMs });

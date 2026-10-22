@@ -1,16 +1,23 @@
 import { App, type QualitySetting } from "./engine/app";
-import { ROOMS, TOTAL_PLANNED } from "./rooms/index";
+import { makeRoom, NORMAL_ROOMS } from "./rooms/index";
 import { fmtMs } from "./core/records";
+import { parseSeed } from "./core/rng";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
 const app = new App($<HTMLCanvasElement>("gl"), {
   crosshair: $("crosshair"), roomTag: $("roomTag"), failLine: $("failLine"), timer: $("timer"), toast: $("toast"),
   onClear: ms => showClear(ms),
-  onPauseChange: p => { $("pause").hidden = !p; if (p) setTimeout(() => $("resumeBtn").focus(), 0); },
-}, ROOMS, $("stick"), $("knob"));
+  onPauseChange: p => { $("pause").hidden = !p; $("seedPause").textContent = String(app.game.seed); if (p) setTimeout(() => $("resumeBtn").focus(), 0); },
+}, makeRoom, { length: NORMAL_ROOMS }, $("stick"), $("knob"));
 
 if (app.input.touch) document.body.classList.add("touchdev");
+
+/* ---------- シード ---------- */
+// URL の ?seed=数字 があればそれを使う。なければタイトルに戻るたびに新しく選ぶ（演出ではなく挑戦の選択なので、ここだけは乱数でよい）
+const urlSeed = parseSeed(new URLSearchParams(location.search).get("seed"));
+const rollSeed = () => urlSeed ?? 1 + (crypto.getRandomValues(new Uint32Array(1))[0] % 999_999_999);
+let titleSeed = rollSeed();
 
 /* ---------- 記録 ---------- */
 function showTitle() {
@@ -20,19 +27,19 @@ function showTitle() {
   const r = app.rec;
   $("recBest").textContent = r.best ? `第${r.best}室` : "—";
   $("recTries").textContent = String(r.attempts);
-  const bt = r.bestTime[String(ROOMS.length)];
+  const bt = r.bestTime[String(NORMAL_ROOMS)];
   $("recTime").textContent = bt ? fmtMs(bt) : "—";
-  $("buildNote").textContent = ROOMS.length < TOTAL_PLANNED ? `いま入れる部屋：第1〜${ROOMS.length}室（全${TOTAL_PLANNED}室を建設中）` : "";
-  if (loaded) app.showcase();
+  titleSeed = rollSeed();
+  $("seedTitle").textContent = String(titleSeed);
+  if (loaded) app.showcase(titleSeed);
 }
 let loaded = false;
 
 function showClear(ms: number) {
-  const full = ROOMS.length >= TOTAL_PLANNED;
-  $("clearTitle").textContent = full ? "外に出た" : `第${ROOMS.length}室を越えた`;
-  $("clearStory").innerHTML = full ? "最後の扉の向こうは、朝だった。" : "扉の先は、まだ工事中の暗がりだった。<br>続きの部屋は もうすぐ開く。";
+  $("clearTitle").textContent = "外に出た";
+  $("clearStory").innerHTML = `最後の扉の向こうは、朝だった。<br><span class="seed">シード ${app.game.seed}</span>`;
   $("clrTime").textContent = fmtMs(ms);
-  $("clrBest").textContent = fmtMs(app.rec.bestTime[String(ROOMS.length)]);
+  $("clrBest").textContent = fmtMs(app.rec.bestTime[String(NORMAL_ROOMS)]);
   $("clrTries").textContent = String(app.rec.attempts);
   $("clear").hidden = false;
   document.body.classList.add("playing-off");
@@ -42,7 +49,7 @@ function showClear(ms: number) {
 function begin() {
   $("title").hidden = true; $("clear").hidden = true; $("pause").hidden = true;
   document.body.classList.remove("playing-off");
-  app.start();
+  app.start(titleSeed);
 }
 
 /* ---------- 設定 ---------- */
@@ -85,7 +92,7 @@ addEventListener("keydown", e => {
 
 /* ---------- 画面遷移 ---------- */
 $("startBtn").onclick = begin;
-$("againBtn").onclick = begin;
+$("againBtn").onclick = () => { titleSeed = rollSeed(); begin(); };
 $("toTitleBtn").onclick = showTitle;
 $("resumeBtn").onclick = () => app.setPaused(false);
 $("pauseBtn").onclick = () => app.setPaused(true);
@@ -98,11 +105,11 @@ app.mats.preload(p => { ($("startBtn") as HTMLButtonElement).textContent = `読�
   const b = $("startBtn") as HTMLButtonElement;
   b.disabled = false; b.textContent = "はいる"; b.focus();
   loaded = true;
-  if (!app.running) app.showcase();
+  if (!app.running) app.showcase(titleSeed);
 });
 
 /* ---------- 開発用（npm run dev のときだけ） ---------- */
-if (import.meta.env.DEV) (window as any).__t3 = { app, ROOMS, begin };
+if (import.meta.env.DEV) (window as any).__t3 = { app, makeRoom, begin };
 
 // ホットリロード：古い App（描画ループ・AudioContext・音源・リスナー）を必ず破棄してから作り直す
 if (import.meta.hot) {

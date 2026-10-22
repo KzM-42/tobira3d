@@ -1,41 +1,69 @@
 // 第4室 月見の座敷 — 赤い物の数の襖を開けよ
 import * as THREE from "three";
-import type { RoomDef } from "../core/types";
+import type { DoorSpec, RoomDef } from "../core/types";
+import { nearDoor } from "../core/types";
 import { place } from "./props";
+import { kanji, type Plan, type Rng } from "./common";
 
-const RED = 0xa3161a; // 漆の朱。部屋の中で赤はこの4つだけ
+const RED = 0xa3161a; // 漆の朱。部屋の中で赤はこれだけ
+/** 赤くなりうる物（赤でない時の色） */
+const THINGS = [
+  { id: "daruma", name: "だるま", other: 0xe8e0d0 },
+  { id: "bowl", name: "椀", other: 0x141010 },
+  { id: "pot", name: "急須", other: 0x3d5a3a },
+  { id: "cushionC", name: "座布団", other: 0x1f2a48 },
+  { id: "cushionL", name: "座布団", other: 0x1f2a48 },
+  { id: "cushionR", name: "座布団", other: 0x1f2a48 },
+  { id: "umbrella", name: "屏風の裏の傘", other: 0x2b3a55 },
+] as const;
+type Thing = (typeof THINGS)[number]["id"];
 
-export const washitsu: RoomDef<{}> = {
-  id: "washitsu",
-  name: "月見の座敷",
-  limit: 25,
-  shell: {
-    w: 5.4, d: 5.4, h: 2.45,
-    floor: "tatami", wall: "clay_plaster", wallTile: 1.6, ceiling: "white_oak_veneer", ceilingTile: 1.4,
-    entryStyle: "fusuma", footstep: "tatami", tone: "washitsu", reverb: 0.5,
-    fog: { color: 0x05070c, density: 0.05 }, env: 0.12, exposure: 1.1,
-  },
-  doors: [
-    { wall: "w", at: -1.6, label: "三", style: "fusuma" },
-    { wall: "w", at: 0, label: "五", style: "fusuma" },
-    { wall: "w", at: 1.6, label: "四", style: "fusuma" },
-  ],
-  answer: 2,
-  logic: {
-    init: () => ({}),
-    miss: () => "赤い物は 4つ（だるま・椀・座布団・屏風の裏の傘）",
-  },
-  build(kit, ) {
+export function washitsuRoom(r: Rng, p: Plan): RoomDef<{}> {
+  // 赤い物の数 N。lv が上がると数が増え、屏風の裏の傘が赤いことが多く、選択肢が隣り合う
+  const n = r.int(2, p.lv >= 2 ? 6 : 5);
+  const pool = r.shuffle(THINGS.map(t => t.id));
+  if (p.lv >= 1 && r.chance(0.7) && !pool.slice(0, n).includes("umbrella")) { pool.splice(pool.indexOf("umbrella"), 1); pool.unshift("umbrella"); }
+  const red = new Set<Thing>(pool.slice(0, n));
+  const near = [n - 1, n + 1].filter(v => v >= 1 && v <= 9), far = [n - 2, n + 2, n + 3].filter(v => v >= 1 && v <= 9);
+  const others = p.lv >= 1 && near.length === 2 ? near : r.shuffle([...near, ...far]).slice(0, 2);
+  const labels = r.shuffle([n, ...others]);
+  const doors: DoorSpec[] = [-1.6, 0, 1.6].map((at, i) => ({ wall: "w", at, label: kanji(labels[i]), style: "fusuma" }));
+  const answer = labels.indexOf(n);
+  const cushions = ["cushionC", "cushionL", "cushionR"].filter(c => red.has(c as Thing)).length;
+  const names = [...THINGS.filter(t => red.has(t.id) && !t.id.startsWith("cushion")).map(t => t.name), ...(cushions ? [`座布団${cushions > 1 ? cushions + "枚" : ""}`] : [])];
+  const colors = Object.fromEntries(THINGS.map(t => [t.id, red.has(t.id) ? RED : t.other])) as Record<Thing, number>;
+  const shell = washitsuShell;
+  return {
+    id: "washitsu", kind: "count", name: "月見の座敷", limit: 25, shell, doors, answer,
+    spec: { n, red: [...red].sort(), labels },
+    logic: {
+      init: () => ({}),
+      miss: () => `赤い物は ${n}つ（${names.join("・")}）`,
+    },
+    build(kit) { buildWashitsu(kit, colors); },
+    solution: [{ at: 3.0, moveTo: [1.8, -0.8] }, { at: 6.0, moveTo: nearDoor(shell, doors[answer]) }, { at: 8.0, door: answer }],
+  };
+}
+
+const washitsuShell: RoomDef["shell"] = {
+  w: 5.4, d: 5.4, h: 2.45,
+  floor: "tatami", wall: "clay_plaster", wallTile: 1.6, ceiling: "white_oak_veneer", ceilingTile: 1.4,
+  entryStyle: "fusuma", footstep: "tatami", tone: "washitsu", reverb: 0.5,
+  fog: { color: 0x05070c, density: 0.05 }, env: 0.12, exposure: 1.1,
+};
+
+function buildWashitsu(kit: Parameters<RoomDef["build"]>[0], colors: Record<Thing, number>) {
     const M = kit.mats, W = kit.W, D = kit.D, H = kit.H;
     const wood = M.pbr("white_oak_veneer", { tile: 0.8, color: 0xb89a74 });
     const dark = M.pbr("walnut_veneer", { tile: 0.8, color: 0x5a3f2a });
-    const red = M.plain(RED, 0.32, 0, { envMapIntensity: 1.2 } as any);
+    const mats = new Map<number, THREE.Material>();
+    const col = (id: Thing) => { const c = colors[id]; if (!mats.has(c)) mats.set(c, c === RED ? M.plain(RED, 0.32, 0, { envMapIntensity: 1.2 } as any) : M.plain(c, id.startsWith("cushion") ? 0.85 : 0.35)); return mats.get(c)!; };
     // 柱と鴨居
     for (const [x, z] of [[-W / 2, -D / 2], [W / 2, -D / 2], [-W / 2, D / 2], [W / 2, D / 2]]) kit.box(0.12, H, 0.12, wood, [x + Math.sign(-x) * 0.06, 0, z + Math.sign(-z) * 0.06], { cast: false });
     for (const z of [-D / 2 + 0.03, D / 2 - 0.03]) kit.box(W, 0.07, 0.06, wood, [0, 2.24, z], { cast: false });
     for (const x of [-W / 2 + 0.03, W / 2 - 0.03]) kit.box(0.06, 0.07, D, wood, [x, 2.24, 0], { cast: false });
 
-    // 床の間（北）：掛け軸とだるま（赤1）
+    // 床の間（北）：掛け軸とだるま
     kit.box(2.0, 0.14, 0.62, dark, [0, 0, -D / 2 + 0.31], { collide: true });
     kit.box(0.1, H, 0.1, M.pbr("walnut_veneer", { tile: 0.5, color: 0x3a2a1c }), [1.05, 0, -D / 2 + 0.6], { collide: true });
     const scroll = place(kit, [-0.15, 1.5, -D / 2 + 0.02]);
@@ -44,26 +72,25 @@ export const washitsu: RoomDef<{}> = {
     kit.box(0.44, 1.18, 0.006, M.plain(0x6b6040, 0.85), [0, -0.6, 0.003], { parent: scroll, cast: false });
     kit.sign({ w: 0.34, h: 1.0, lines: ["赤き物の数の", "襖を開けよ"], bg: "#efe7d2", fg: "#141008", font: "brush", style: "scroll", size: 0.4, vertical: true }, [0, 0, 0.008], 0, scroll);
     const daruma = place(kit, [0.55, 0.14, -D / 2 + 0.32], 0.15);
-    const body = kit.sphere(0.13, red, [0, 0.12, 0], { parent: daruma }); body.scale.set(1, 1.05, 0.95);
+    const body = kit.sphere(0.13, col("daruma"), [0, 0.12, 0], { parent: daruma }); body.scale.set(1, 1.05, 0.95);
     const face = kit.mesh(new THREE.CircleGeometry(0.07, 24), M.plain(0xf1e6d0, 0.5), [0, 0.15, 0.124], { parent: daruma, cast: false });
     face.scale.set(1, 0.85, 1);
     kit.sphere(0.012, M.plain(0x101010, 0.3), [-0.025, 0.16, 0.13], { parent: daruma, cast: false });
 
-    // 卓袱台と椀（赤2）・急須・盆
+    // 卓袱台と椀・急須・盆
     const table = place(kit, [0, 0, -0.3]);
     kit.cyl(0.5, 0.5, 0.035, dark, [0, 0.3, 0], { parent: table, seg: 40 });
     for (const [x, z] of [[-0.3, -0.3], [0.3, -0.3], [-0.3, 0.3], [0.3, 0.3]]) kit.box(0.04, 0.3, 0.04, dark, [x, 0, z], { parent: table });
-    kit.lathe([[0, 0], [0.035, 0], [0.06, 0.02], [0.075, 0.07], [0.07, 0.075], [0, 0.03]], red, [0.18, 0.335, 0.05], { parent: table });
-    kit.lathe([[0, 0], [0.06, 0], [0.075, 0.06], [0.05, 0.11], [0.02, 0.12], [0, 0.12]], M.plain(0x3d5a3a, 0.3), [-0.18, 0.335, -0.05], { parent: table });
+    kit.lathe([[0, 0], [0.035, 0], [0.06, 0.02], [0.075, 0.07], [0.07, 0.075], [0, 0.03]], col("bowl"), [0.18, 0.335, 0.05], { parent: table });
+    kit.lathe([[0, 0], [0.06, 0], [0.075, 0.06], [0.05, 0.11], [0.02, 0.12], [0, 0.12]], col("pot"), [-0.18, 0.335, -0.05], { parent: table });
     kit.box(0.3, 0.015, 0.2, M.plain(0x0d0b09, 0.25), [0.0, 0.335, -0.25], { parent: table, cast: false });
     kit.collider(-0.55, -0.85, 0.55, 0.25);
-    // 座布団：赤（赤3）1枚と藍2枚
-    const cushion = (x: number, z: number, col: THREE.Material, rot: number) => { const c = kit.box(0.55, 0.07, 0.6, col, [x, 0, z], { rotY: rot }); c.scale.y = 1; return c; };
-    cushion(0, 0.55, red, 0.05);
-    const indigo = M.plain(0x1f2a48, 0.85);
-    cushion(-0.85, -0.3, indigo, Math.PI / 2); cushion(0.85, -0.3, indigo, Math.PI / 2 + 0.1);
+    // 座布団3枚
+    const cushion = (x: number, z: number, m: THREE.Material, rot: number) => kit.box(0.55, 0.07, 0.6, m, [x, 0, z], { rotY: rot });
+    cushion(0, 0.55, col("cushionC"), 0.05);
+    cushion(-0.85, -0.3, col("cushionL"), Math.PI / 2); cushion(0.85, -0.3, col("cushionR"), Math.PI / 2 + 0.1);
 
-    // 屏風（北東の隅）とその裏の和傘（赤4）
+    // 屏風（北東の隅）とその裏の和傘
     const byobu = place(kit, [1.75, 0, -1.75], -Math.PI / 4);
     const gold = M.plain(0xb08a3a, 0.45, 0.65), frameM = M.plain(0x1a1210, 0.4);
     for (let i = 0; i < 4; i++) {
@@ -74,9 +101,9 @@ export const washitsu: RoomDef<{}> = {
     kit.collider(1.0, -2.55, 2.55, -1.0);
     const umb = place(kit, [2.42, 0, -2.42], 0.6);
     kit.cyl(0.012, 0.012, 1.55, wood, [0, 0, 0], { parent: umb });
-    const canopy = kit.mesh(new THREE.ConeGeometry(0.11, 1.0, 16, 1, true), red, [0, 1.0, 0], { parent: umb });
+    const canopy = kit.mesh(new THREE.ConeGeometry(0.11, 1.0, 16, 1, true), col("umbrella"), [0, 1.0, 0], { parent: umb });
     canopy.rotation.x = Math.PI;
-    kit.sphere(0.03, red, [0, 1.52, 0], { parent: umb });
+    kit.sphere(0.03, col("umbrella"), [0, 1.52, 0], { parent: umb });
     umb.rotation.z = 0.12;
 
     // 箪笥（南西）と行灯（北西）
@@ -104,6 +131,4 @@ export const washitsu: RoomDef<{}> = {
     kit.cyl(0.003, 0.003, 0.4, M.plain(0x111111), [0.9, H - 0.4, 0.9], { cast: false });
     kit.cyl(0.18, 0.18, 0.26, M.plain(0xd8cfb8, 0.9), [0.9, H - 0.66, 0.9], { cast: false });
     kit.hemi(0x2a3348, 0x0b0805, 0.07);
-  },
-  solution: [{ at: 3.0, moveTo: [1.8, -0.8] }, { at: 6.0, moveTo: [-2.0, 1.6] }, { at: 8.0, door: 2 }],
-};
+}

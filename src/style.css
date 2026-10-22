@@ -65,3 +65,7 @@ body:not(.touchdev) .controls.touch { display: none; }
 .vol label { display: grid; grid-template-columns: 4em 1fr 3em; align-items: center; gap: 10px; }
 .vol output { text-align: right; font-variant-numeric: tabular-nums; color: var(--paper); }
 .vol input[type=range] { accent-color: var(--amber); width: 100%; }
+
+/* シードの表示 */
+.seed { margin: 0; font-size: 11px; letter-spacing: .15em; color: #6a645a; font-family: "Hiragino Sans", "Yu Gothic", sans-serif; }
+.seed b { font-weight: 500; color: var(--dim); font-variant-numeric: tabular-nums; letter-spacing: .05em; }

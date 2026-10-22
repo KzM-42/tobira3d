@@ -1,8 +1,8 @@
 // エンジン本体：固定ステップのループ、部屋の読み込みと破棄、扉を通る演出、調べる、HUD。
 import * as THREE from "three";
-import { Game, HZ, PASS, ENTER, BLACKOUT } from "../core/game";
+import { Game, HZ, PASS, ENTER, BLACKOUT, type GameOpts } from "../core/game";
 import { loadRecords, saveRecords, type Records } from "../core/records";
-import { spawnOf, type Floor, type RoomDef } from "../core/types";
+import { spawnOf, type Floor, type RoomDef, type RoomGen } from "../core/types";
 import { View } from "./view";
 import { Materials } from "./materials";
 import { AudioEngine } from "./audio";
@@ -51,11 +51,11 @@ export class App {
   private passDoor: DoorObj | null = null;
   private showcaseOn = false;
 
-  constructor(canvas: HTMLCanvasElement, private ui: UI, readonly rooms: RoomDef[], stick: HTMLElement, knob: HTMLElement) {
+  constructor(canvas: HTMLCanvasElement, private ui: UI, readonly gen: RoomGen, readonly opts: GameOpts, stick: HTMLElement, knob: HTMLElement) {
     this.view = new View(canvas);
     this.mats = new Materials(this.view.renderer);
     this.input = new Input(canvas, stick, knob);
-    this.game = new Game(rooms, this.rec, saveRecords);
+    this.game = new Game(gen, opts, this.rec, saveRecords);
     this.player.onStep = run => this.footstep(run);
     this.input.onLockChange = locked => { if (!locked && this.running && !this.input.touch) this.setPaused(true); };
     this.applyQuality();
@@ -87,7 +87,7 @@ export class App {
   }
 
   /* ---------------- 進行 ---------------- */
-  start() {
+  start(seed: number) {
     this.audio.init();
     clearTimeout(this.quietTimer);
     this.audio.setRunning(true);
@@ -95,8 +95,8 @@ export class App {
     this.running = true; this.paused = false;
     this.input.enabled = true;
     this.showcaseOn = false;
-    this.game = new Game(this.rooms, this.rec, saveRecords);
-    this.game.start();
+    this.game = new Game(this.gen, this.opts, this.rec, saveRecords);
+    this.game.start(seed);
     this.handleEvents();
     this.input.lock();
   }
@@ -104,15 +104,16 @@ export class App {
   stop() {
     this.running = false; this.input.enabled = false; this.input.unlock();
     this.paused = false;
-    this.game = new Game(this.rooms, this.rec, saveRecords);
+    this.game = new Game(this.gen, this.opts, this.rec, saveRecords);
     this.kit?.dispose(); this.kit = null; this.mats.disposeOwned();
     this.audio.setAmbient(false);
     this.audio.setRunning(false);
   }
 
-  /** タイトル画面の背景：第1室を静かに映す */
-  showcase() {
-    this.loadRoom(0);
+  /** タイトル画面の背景：これから挑むシードの第1室を静かに映す */
+  showcase(seed: number) {
+    this.game.seed = seed;
+    this.loadRoom(this.game.room = this.game.roomAt(0));
     this.kit!.entry.passage!.visible = false;
     this.kit!.silent = true;
     this.showcaseOn = true;
@@ -127,10 +128,9 @@ export class App {
     this.ui.onPauseChange(p);
   }
 
-  private loadRoom(i: number) {
+  private loadRoom(def: RoomDef) {
     this.kit?.dispose();
     this.mats.disposeOwned();
-    const def = this.rooms[i];
     const kit = new Kit(def, this.mats, this.audio, this.view.quality);
     kit.buildShell();
     def.build(kit, () => this.game.s);
@@ -150,9 +150,9 @@ export class App {
     for (const e of g.events.splice(0)) {
       switch (e.type) {
         case "enter":
-          this.loadRoom(e.room);
+          this.loadRoom(g.room);
           this.passDoor = null;
-          this.ui.roomTag.textContent = `第${e.room + 1}室　${this.rooms[e.room].name}`;
+          this.ui.roomTag.textContent = `第${e.room + 1}室　${g.room.name}`;
           this.tagTimer = 3.2;
           if (e.fail && g.failNote) {
             const f = g.failNote;
@@ -171,7 +171,7 @@ export class App {
         }
         case "blackout": this.audio.play("pop"); this.fromBlack = true; break;
         case "control": {
-          const [sx, sz] = spawnOf(this.rooms[g.ri].shell);
+          const [sx, sz] = spawnOf(g.room.shell);
           this.player.place(sx, sz, 0);
           this.entryCloseK = 0;
           this.kit!.entry.sound(false);
@@ -274,7 +274,7 @@ export class App {
     const cam = this.view.camera, g = this.game, p = this.player;
     let x: number, y: number, z: number, yaw: number, pitch: number;
     if (this.showcaseOn && this.kit && !this.running) {
-      const [sx, sz] = spawnOf(this.rooms[0].shell);
+      const [sx, sz] = spawnOf(this.kit.def.shell);
       cam.position.set(sx + Math.sin(this.time * 0.13) * 0.08, EYE + Math.sin(this.time * 0.4) * 0.01, sz + 0.2);
       cam.rotation.set(-0.02 + Math.sin(this.time * 0.17) * 0.015, Math.sin(this.time * 0.09) * 0.12, 0, "YXZ");
       return;

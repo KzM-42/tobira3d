@@ -1,35 +1,48 @@
 // 第2室 深夜のオフィス — 鳴っている電話の机の番号の会議室へ
 import * as THREE from "three";
-import type { RoomDef } from "../core/types";
+import type { DoorSpec, RoomDef, Wall } from "../core/types";
+import { nearDoor } from "../core/types";
 import { officeChair, place, plant } from "./props";
+import type { Plan, Rng } from "./common";
 
 const DESKS: [number, number][] = [[-1.5, -1.5], [1.5, -1.5], [-1.5, 0.8], [1.5, 0.8]];
-const RINGING = 2;             // 机3（DESKS の添字）
-const RING_EVERY = 3, RING_START = 0.5, RING_LEN = 0.8;
-export const ringingAt = (t: number) => t >= RING_START && (t - RING_START) % RING_EVERY < RING_LEN;
+const SLOTS: { wall: Wall; at: number }[] = [{ wall: "w", at: -1.8 }, { wall: "w", at: 1.3 }, { wall: "e", at: -1.8 }, { wall: "e", at: 1.3 }];
+const RING_START = 0.5, RING_LEN = 0.8;
+export const ringingAt = (t: number, every = 3) => t >= RING_START && (t - RING_START) % every < RING_LEN;
 
-export const office: RoomDef<{}> = {
-  id: "office",
-  name: "深夜のオフィス",
-  limit: 20,
-  shell: {
-    w: 7, d: 7.6, h: 2.7,
-    floor: "dirty_carpet", floorTile: 1.0, floorColor: 0x7c8590, wall: "painted_plaster_wall", wallTile: 2.2, ceiling: "ceiling_interior", ceilingTile: 1.2,
-    entryStyle: "office", footstep: "carpet", tone: "office", reverb: 1.1,
-    fog: { color: 0x040507, density: 0.07 }, env: 0.14, exposure: 0.82,
-  },
-  doors: [
-    { wall: "w", at: -1.8, label: "会議室 1", style: "office" },
-    { wall: "w", at: 1.3, label: "会議室 2", style: "office" },
-    { wall: "e", at: -1.8, label: "会議室 3", style: "office" },
-    { wall: "e", at: 1.3, label: "会議室 4", style: "office" },
-  ],
-  answer: 2,
-  logic: {
-    init: () => ({}),
-    miss: () => "鳴っていたのは 机3 の電話だった（扉は「会議室 3」）",
-  },
-  build(kit) {
+export function officeRoom(r: Rng, p: Plan): RoomDef<{}> {
+  // lv が上がると、机の番号・島の番号・会議室の並びがばらばらになり、ベルの間隔が空く
+  const deskNo = p.lv >= 1 ? r.shuffle([1, 2, 3, 4]) : [1, 2, 3, 4];
+  const isleNo = p.lv >= 1 ? r.shuffle([1, 2, 3, 4]) : deskNo;
+  const roomNo = p.lv >= 1 ? r.shuffle([1, 2, 3, 4]) : [1, 2, 3, 4];
+  const ringing = r.int(0, 3);
+  const screen = r.int(0, 3);
+  const every = 3 + Math.min(3, p.lv) * 0.5;
+  const doors: DoorSpec[] = SLOTS.map((d, i) => ({ ...d, label: `会議室 ${roomNo[i]}`, style: "office" }));
+  const num = deskNo[ringing];
+  const answer = roomNo.indexOf(num);
+  const shell = officeShell;
+  return {
+    id: "office", kind: "sound", name: "深夜のオフィス", limit: 20 + Math.min(2, p.lv), shell, doors, answer,
+    spec: { deskNo, isleNo, roomNo, ringing, screen, every },
+    logic: {
+      init: () => ({}),
+      miss: () => `鳴っていたのは 机${num} の電話だった（扉は「会議室 ${num}」）`,
+    },
+    build(kit) { buildOffice(kit, { deskNo, isleNo, ringing, screen, every }); },
+    solution: [{ at: 2.0, moveTo: nearDoor(shell, doors[answer]) }, { at: 4.0, door: answer }],
+  };
+}
+
+const officeShell: RoomDef["shell"] = {
+  w: 7, d: 7.6, h: 2.7,
+  floor: "dirty_carpet", floorTile: 1.0, floorColor: 0x7c8590, wall: "painted_plaster_wall", wallTile: 2.2, ceiling: "ceiling_interior", ceilingTile: 1.2,
+  entryStyle: "office", footstep: "carpet", tone: "office", reverb: 1.1,
+  fog: { color: 0x040507, density: 0.07 }, env: 0.14, exposure: 0.82,
+};
+
+function buildOffice(kit: Parameters<RoomDef["build"]>[0], o: { deskNo: number[]; isleNo: number[]; ringing: number; screen: number; every: number }) {
+  const RINGING = o.ringing;
     const M = kit.mats, H = kit.H;
     const deskTop = M.pbr("white_oak_veneer", { tile: 1.2, color: 0xd8d2c4 });
     const metal = M.plain(0x9a9da0, 0.4, 0.8), black = M.plain(0x111214, 0.35, 0.2), plastic = M.plain(0xd9d6cc, 0.5);
@@ -42,7 +55,7 @@ export const office: RoomDef<{}> = {
       // モニター（机2だけ点いている）
       kit.box(0.2, 0.02, 0.16, black, [-0.15, 0.755, -0.2], { parent: g });
       kit.box(0.04, 0.22, 0.03, black, [-0.15, 0.775, -0.23], { parent: g });
-      const screenOn = i === 1;
+      const screenOn = i === o.screen;
       kit.box(0.6, 0.36, 0.035, black, [-0.15, 0.93, -0.22], { parent: g });
       const scr = kit.mesh(new THREE.PlaneGeometry(0.56, 0.32), screenOn ? M.glow(0x7fa8d8, 1.4) : M.plain(0x050607, 0.12, 0.3), [-0.15, 1.11, -0.2], { parent: g, cast: false });
       scr.position.z = -0.2 + 0.018;
@@ -61,7 +74,7 @@ export const office: RoomDef<{}> = {
         const glow = kit.point([x + 0.48, 0.9, z - 0.1], { color: 0xff3020, intensity: 0, distance: 1.2 });
         let was = false;
         kit.onUpdate(t => {
-          const on = ringingAt(t);
+          const on = ringingAt(t, o.every);
           if (on && !was) kit.play("ring", pos);
           was = on;
           const blink = on && Math.floor(t * 10) % 2 === 0;
@@ -71,22 +84,22 @@ export const office: RoomDef<{}> = {
       }
       // 机の番号札（通路側から読める）
       kit.box(0.2, 0.2, 0.012, M.plain(0x0e0f10, 0.2, 0.1, { transparent: true, opacity: 0.85 }), [0.55, 0.755, 0.33], { parent: g, cast: false });
-      kit.sign({ w: 0.16, h: 0.16, lines: [String(i + 1)], bg: "#f4f4f0", fg: "#151515", font: "gothic", style: "plate", size: 0.9 }, [0.55, 0.855, 0.337], 0, g);
+      kit.sign({ w: 0.16, h: 0.16, lines: [String(o.deskNo[i])], bg: "#f4f4f0", fg: "#151515", font: "gothic", style: "plate", size: 0.9 }, [0.55, 0.855, 0.337], 0, g);
       // 天井から吊るした島番号
       kit.cyl(0.003, 0.003, 0.45, metal, [0, H - 0.45, 0], { parent: g, cast: false });
-      kit.sign({ w: 0.36, h: 0.22, lines: [`島 ${i + 1}`], bg: "#2a2d33", fg: "#e9e9e4", font: "gothic", style: "plate", size: 0.62 }, [0, H - 0.56, 0.005], 0, g);
+      kit.sign({ w: 0.36, h: 0.22, lines: [`島 ${o.isleNo[i]}`], bg: "#2a2d33", fg: "#e9e9e4", font: "gothic", style: "plate", size: 0.62 }, [0, H - 0.56, 0.005], 0, g);
       officeChair(kit, [x - 0.15, 0, z + 0.62], Math.PI + (i - 1.5) * 0.25);
       kit.collider(x - 0.77, z - 0.4, x + 0.77, z + 0.4);
     });
 
     // ホワイトボードの指示
     const wb = place(kit, [0, 1.45, -3.79]);
-    kit.box(1.9, 1.02, 0.04, M.plain(0x9ea2a6, 0.3, 0.9), [0, -0.51, 0], { parent: wb });
-    kit.sign({ w: 1.84, h: 0.96, lines: ["鳴っている電話の", "机の番号の", "会議室へ"], bg: "#f2f4f3", fg: "#1d2e6b", font: "hand", style: "whiteboard", size: 0.24, rough: 0.25 }, [0, 0, 0.022], 0, wb);
+    kit.box(1.6, 1.02, 0.04, M.plain(0x9ea2a6, 0.3, 0.9), [0, -0.51, 0], { parent: wb });
+    kit.sign({ w: 1.54, h: 0.96, lines: ["鳴っている電話の", "机の番号の", "会議室へ"], bg: "#f2f4f3", fg: "#1d2e6b", font: "hand", style: "whiteboard", size: 0.22, rough: 0.25 }, [0, 0, 0.022], 0, wb);
     kit.box(0.8, 0.03, 0.06, M.plain(0x9ea2a6, 0.3, 0.9), [0, -0.53, 0.04], { parent: wb });
 
     // 北の窓（夜景）とブラインド
-    for (const wx of [-2.6, 2.6]) {
+    for (const wx of [-2.75, 2.75]) {
       const win = place(kit, [wx, 0.9, -3.79]);
       const city = M.canvas(256, 320, (g, W, Hh) => {
         const gr = g.createLinearGradient(0, 0, 0, Hh); gr.addColorStop(0, "#0b1424"); gr.addColorStop(1, "#1d2236"); g.fillStyle = gr; g.fillRect(0, 0, W, Hh);
@@ -120,6 +133,4 @@ export const office: RoomDef<{}> = {
     kit.sign({ w: 0.3, h: 0.1, lines: ["非常口"], bg: "#1fbf5a", fg: "#ffffff", font: "gothic", style: "plate", size: 0.8, emissive: 1.2 }, [0, 2.39, 3.74], Math.PI);
     kit.point([0, 2.2, 3.5], { color: 0x3cff7a, intensity: 0.4, distance: 2.5 });
     kit.hemi(0x2a3340, 0x0a0a0a, 0.05);
-  },
-  solution: [{ at: 2.0, moveTo: [2.7, -1.8] }, { at: 4.0, door: 2 }],
-};
+}

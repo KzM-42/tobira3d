@@ -61,9 +61,20 @@ export interface Action {
   door?: number;
 }
 
+/** 部屋の種類（5種類を部品にして使い回す） */
+export type RoomKind = "light" | "sound" | "wait" | "count" | "blackout";
+
+/** 部屋を作るときの条件（シード・何番目か・難しさ） */
+export interface GenCtx { seed: number; index: number; heat: number }
+/** 部屋の作り方：同じ GenCtx なら必ず同じ部屋 */
+export type RoomGen = (c: GenCtx) => RoomDef;
+
 export interface RoomDef<S = any> {
   id: string;
+  kind: RoomKind;
   name: string;
+  /** 生成に使った値（手がかり・正解など）。同じシードなら完全に一致する */
+  spec: Record<string, unknown>;
   limit: number;
   shell: ShellSpec;
   doors: DoorSpec[];
@@ -73,6 +84,15 @@ export interface RoomDef<S = any> {
   build(kit: Kit, state: () => S): void;
   solution: Action[];
   wrongs?: Action[][];
+}
+
+/** 扉の開口部の床上の位置 */
+export const doorPos = (shell: ShellSpec, d: { wall: Wall; at: number }): [number, number] =>
+  d.wall === "n" ? [d.at, -shell.d / 2] : d.wall === "e" ? [shell.w / 2, d.at] : [-shell.w / 2, d.at];
+/** 扉の手前（部屋の内側へ inward だけ入った所） */
+export function nearDoor(shell: ShellSpec, d: { wall: Wall; at: number }, inward = 0.7): [number, number] {
+  const [x, z] = doorPos(shell, d);
+  return d.wall === "n" ? [x, z + inward] : d.wall === "e" ? [x - inward, z] : [x + inward, z];
 }
 
 export const spawnOf = (shell: ShellSpec): [number, number] => [shell.entryX ?? 0, shell.d / 2 - 1.0];

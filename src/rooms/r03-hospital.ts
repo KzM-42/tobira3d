@@ -1,40 +1,56 @@
 // 第3室 夜間外来の待合室 — 呼び出しまで動くな。呼ばれた診察室へ
 import * as THREE from "three";
-import type { RoomDef } from "../core/types";
+import type { DoorSpec, RoomDef } from "../core/types";
+import { nearDoor } from "../core/types";
 import { place, plant } from "./props";
+import { sample, type Plan, type Rng } from "./common";
 
-export const CALL_AT = 4.0;      // 呼び出しの時刻（秒）
 const MOVE_LIMIT = 0.25;         // これ以上スタート地点から離れたら「動いた」
 
-export const hospital: RoomDef<{ moved: boolean }> = {
-  id: "hospital",
-  name: "夜間外来の待合室",
-  limit: 20,
-  shell: {
-    w: 6, d: 7, h: 2.6,
-    floor: "old_linoleum_flooring_01", floorTile: 1.6, floorColor: 0x8a9a94, wall: "painted_plaster_wall", wallTile: 2, ceiling: "ceiling_interior", ceilingTile: 1.2,
-    wainscot: { mat: "long_white_tiles", h: 1.2 },
-    entryStyle: "hospital", footstep: "linoleum", tone: "hospital", reverb: 1.3,
-    fog: { color: 0x040606, density: 0.065 }, env: 0.18, exposure: 0.8,
-  },
-  doors: [
-    { wall: "n", at: -1.85, label: "診察室 1", style: "hospital" },
-    { wall: "n", at: 0, label: "診察室 2", style: "hospital" },
-    { wall: "n", at: 1.85, label: "診察室 3", style: "hospital" },
-  ],
-  answer: 1,
-  logic: {
-    init: () => ({ moved: false }),
-    update(s, c) {
-      if (c.t < CALL_AT && Math.hypot(c.px - c.sx, c.pz - c.sz) > MOVE_LIMIT) s.moved = true;
+export function hospitalRoom(r: Rng, p: Plan): RoomDef<{ moved: boolean }> {
+  // 呼び出しの時刻は lv とともに遅くなる。lv2 からは途中で「お待ちください」が出る（呼び出しではない）
+  const callAt = 3.5 + r.int(0, 2 + Math.min(4, p.lv)) * 0.5;
+  const nums = p.lv >= 1 ? sample(r, [1, 2, 3, 4, 5, 6, 7, 8, 9], 3).sort((a, b) => a - b) : [1, 2, 3];
+  const answer = r.int(0, 2);
+  const decoyAt = p.lv >= 2 ? Math.round(callAt * 0.5 * 10) / 10 : null;
+  const doors: DoorSpec[] = [-1.85, 0, 1.85].map((at, i) => ({ wall: "n", at, label: `診察室 ${nums[i]}`, style: "hospital" }));
+  const label = doors[answer].label!;
+  const shell = hospitalShell;
+  const wrongs = [
+    [{ at: 1.0, moveTo: [0.6, 2.5] as [number, number] }, { at: callAt + 1.5, door: answer }],
+    [{ at: callAt - 0.8, door: answer }],
+  ];
+  if (decoyAt != null) wrongs.push([{ at: decoyAt + 0.3, moveTo: nearDoor(shell, doors[answer]) }, { at: callAt + 1.0, door: answer }]);
+  return {
+    id: "hospital", kind: "wait", name: "夜間外来の待合室", limit: 20, shell, doors, answer,
+    spec: { callAt, nums, called: answer, decoyAt },
+    logic: {
+      init: () => ({ moved: false }),
+      update(s, c) {
+        if (c.t < callAt && Math.hypot(c.px - c.sx, c.pz - c.sz) > MOVE_LIMIT) s.moved = true;
+      },
+      check(s, c) {
+        if (s.moved || c.t < callAt) return "呼び出しの前に 動いてしまった";
+        return null;
+      },
+      miss: () => `呼ばれたのは「${label}」だった`,
     },
-    check(s, c) {
-      if (s.moved || c.t < CALL_AT) return "呼び出しの前に 動いてしまった";
-      return null;
-    },
-    miss: () => "呼ばれたのは「診察室 2」だった",
-  },
-  build(kit) {
+    build(kit) { buildHospital(kit, { callAt, label, decoyAt }); },
+    solution: [{ at: callAt + 0.6, moveTo: nearDoor(shell, doors[answer], 1.0) }, { at: callAt + 1.5, door: answer }],
+    wrongs,
+  };
+}
+
+const hospitalShell: RoomDef["shell"] = {
+  w: 6, d: 7, h: 2.6,
+  floor: "old_linoleum_flooring_01", floorTile: 1.6, floorColor: 0x8a9a94, wall: "painted_plaster_wall", wallTile: 2, ceiling: "ceiling_interior", ceilingTile: 1.2,
+  wainscot: { mat: "long_white_tiles", h: 1.2 },
+  entryStyle: "hospital", footstep: "linoleum", tone: "hospital", reverb: 1.3,
+  fog: { color: 0x040606, density: 0.065 }, env: 0.18, exposure: 0.8,
+};
+
+function buildHospital(kit: Parameters<RoomDef["build"]>[0], o: { callAt: number; label: string; decoyAt: number | null }) {
+  const CALL_AT = o.callAt;
     const M = kit.mats, H = kit.H;
     // 天井から吊るした注意書き（入ってすぐ正面）
     const hang = place(kit, [-1.25, H, 0.9]);
@@ -50,11 +66,14 @@ export const hospital: RoomDef<{ moved: boolean }> = {
     kit.box(1.1, 0.34, 0.08, M.plain(0x1a1b1d, 0.35, 0.3), [0, -0.72, 0], { parent: board });
     kit.sign({ w: 1.0, h: 0.08, lines: ["お呼び出し"], bg: "#1a1b1d", fg: "#9aa0a6", font: "gothic", style: "plate", size: 0.8 }, [0, -0.44, 0.041], 0, board);
     const idle = kit.sign({ w: 1.0, h: 0.2, lines: ["－　－　－"], bg: "#060606", fg: "#3a0c08", font: "gothic", style: "led", size: 0.7, emissive: 0.5 }, [0, -0.6, 0.041], 0, board);
-    const call = kit.sign({ w: 1.0, h: 0.2, lines: ["診察室 2"], bg: "#060606", fg: "#ff5a36", font: "gothic", style: "led", size: 0.72, emissive: 1.6 }, [0, -0.6, 0.041], 0, board);
+    const call = kit.sign({ w: 1.0, h: 0.2, lines: [o.label], bg: "#060606", fg: "#ff5a36", font: "gothic", style: "led", size: 0.72, emissive: 1.6 }, [0, -0.6, 0.041], 0, board);
     call.visible = false;
+    const wait = kit.sign({ w: 1.0, h: 0.2, lines: ["しばらくお待ちください"], bg: "#060606", fg: "#ffb04a", font: "gothic", style: "led", size: 0.5, emissive: 1.2 }, [0, -0.6, 0.041], 0, board);
+    wait.visible = false;
+    const decoyAt = o.decoyAt ?? Infinity;
     const boardLight = kit.point([1.25, H - 0.75, -0.4], { color: 0xff5a36, intensity: 0, distance: 2.2 });
     kit.at(CALL_AT, () => { kit.play("chime", [1.25, H - 0.6, -0.6]); });
-    kit.onUpdate(t => { const on = t >= CALL_AT; call.visible = on; idle.visible = !on; boardLight.intensity = on ? 0.6 : 0; });
+    kit.onUpdate(t => { const on = t >= CALL_AT, w = !on && t >= decoyAt; call.visible = on; wait.visible = w; idle.visible = !on && !w; boardLight.intensity = on ? 0.6 : 0; });
 
     // 待合の長椅子
     const vinyl = M.plain(0x2e4a63, 0.45), steel = M.plain(0xa6a9ac, 0.3, 0.9);
@@ -99,10 +118,4 @@ export const hospital: RoomDef<{ moved: boolean }> = {
     kit.box(0.36, 0.14, 0.05, M.glow(0x3cff7a, 1.6), [0, 2.32, 3.47], { cast: false });
     kit.point([0, 2.2, 3.2], { color: 0x3cff7a, intensity: 0.4, distance: 2.5 });
     kit.hemi(0x324046, 0x0b0b0b, 0.06);
-  },
-  solution: [{ at: 4.6, moveTo: [0, -2.5] }, { at: 5.5, door: 1 }],
-  wrongs: [
-    [{ at: 1.0, moveTo: [0.6, 2.5] }, { at: 5.5, door: 1 }],
-    [{ at: 3.0, door: 1 }],
-  ],
-};
+}
