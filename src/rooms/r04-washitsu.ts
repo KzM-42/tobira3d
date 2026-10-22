@@ -3,7 +3,7 @@ import * as THREE from "three";
 import type { DoorSpec, RoomDef } from "../core/types";
 import { nearDoor } from "../core/types";
 import { place } from "./props";
-import { kanji, type Plan, type Rng } from "./common";
+import { finish, kanji, type Plan, type Rng } from "./common";
 
 const RED = 0xa3161a; // 漆の朱。部屋の中で赤はこれだけ
 /** 赤くなりうる物（赤でない時の色） */
@@ -33,7 +33,7 @@ export function washitsuRoom(r: Rng, p: Plan): RoomDef<{}> {
   const names = [...THINGS.filter(t => red.has(t.id) && !t.id.startsWith("cushion")).map(t => t.name), ...(cushions ? [`座布団${cushions > 1 ? cushions + "枚" : ""}`] : [])];
   const colors = Object.fromEntries(THINGS.map(t => [t.id, red.has(t.id) ? RED : t.other])) as Record<Thing, number>;
   const shell = washitsuShell;
-  return {
+  return finish({
     id: "washitsu", kind: "count", name: "月見の座敷", limit: 25, shell, doors, answer,
     spec: { n, red: [...red].sort(), labels },
     logic: {
@@ -42,7 +42,20 @@ export function washitsuRoom(r: Rng, p: Plan): RoomDef<{}> {
     },
     build(kit) { buildWashitsu(kit, colors); },
     solution: [{ at: 3.0, moveTo: [1.8, -0.8] }, { at: 6.0, moveTo: nearDoor(shell, doors[answer]) }, { at: 8.0, door: answer }],
-  };
+  }, r, p, {
+    lock: { wall: "e", at: 1.9, label: "納戸", style: "fusuma" },
+    earliest: 0,
+    hint: `屏風の裏の傘は ${red.has("umbrella") ? "赤い" : "赤くない"}`,
+    items: () => [
+      { pos: [0.05, 0.338, -0.05], reach: [0.0, 0.7] },
+      { pos: [-0.55, 0.142, -2.35], reach: [-0.55, -1.6] },
+      { pos: [-1.95, 1.002, 2.45], reach: [-1.95, 1.8] },
+    ],
+    darks: [
+      { pos: [1.6, 0.42, 2.692], rotY: Math.PI, reach: [1.6, 1.9] },
+      { pos: [-1.75, 0.42, -2.692], rotY: 0, reach: [-1.75, -1.9] },
+    ],
+  });
 }
 
 const washitsuShell: RoomDef["shell"] = {

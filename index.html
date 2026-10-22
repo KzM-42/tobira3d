@@ -17,6 +17,9 @@
     <div id="roomTag"></div>
     <div id="failLine"></div>
     <div id="toast"></div>
+    <div id="hint"></div>
+    <div id="held"></div>
+    <button id="useBtn" class="round use" aria-label="持ち物を使う">使う</button>
     <div id="stick"><div id="knob"></div></div>
     <div class="hudbtns">
       <button id="pauseBtn" class="round" aria-label="一時停止">II</button>
@@ -52,8 +55,9 @@
         <label><span>環境音</span><input type="range" min="0" max="100" step="5" data-vol="amb" aria-label="環境音の音量" /><output></output></label>
         <label><span>効果音</span><input type="range" min="0" max="100" step="5" data-vol="sfx" aria-label="効果音の音量" /><output></output></label>
       </div>
-      <p class="controls pc">WASD 移動 ／ マウス 視点 ／ Shift 走る ／ クリック・E 調べる・扉を開ける ／ Esc 一時停止</p>
-      <p class="controls touch">左下 移動（大きく倒すと走る） ／ 右側ドラッグ 視点 ／ タップ 調べる・扉を開ける</p>
+      <p class="controls pc">WASD 移動 ／ マウス 視点 ／ Shift 走る ／ クリック・E 調べる・扉を開ける・拾う ／ F 持ち物を使う ／ Esc 一時停止</p>
+      <p class="controls touch">左下 移動（大きく倒すと走る） ／ 右側ドラッグ 視点 ／ タップ 調べる・扉を開ける・拾う ／ 使う 持ち物を使う</p>
+      <p class="controls">小物は1つだけ持てる。懐中電灯は暗がりを照らし、鍵は鍵の扉を開け、メモはヒントを1つ見せる。<br />使えば楽になるが、使うほど 後の部屋は紛らわしくなる。</p>
       <p class="seed">シード <b id="seedTitle">—</b><span id="endlessSeed"></span></p>
       <p class="note">ヘッドホン推奨</p>
     </div>
@@ -63,7 +67,7 @@
     <div class="inner">
       <p class="kicker">PAUSED</p>
       <h2>一時停止</h2>
-      <p class="seed">シード <b id="seedPause">—</b></p>
+      <p class="seed">シード <b id="seedPause">—</b>　紛らわしさ <b id="heatPause">0</b></p>
       <button id="resumeBtn" class="btn">続ける</button>
       <div class="opts">
         <label>画質

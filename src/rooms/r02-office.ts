@@ -3,7 +3,7 @@ import * as THREE from "three";
 import type { DoorSpec, RoomDef, Wall } from "../core/types";
 import { nearDoor } from "../core/types";
 import { officeChair, place, plant } from "./props";
-import type { Plan, Rng } from "./common";
+import { finish, type Plan, type Rng } from "./common";
 
 const DESKS: [number, number][] = [[-1.5, -1.5], [1.5, -1.5], [-1.5, 0.8], [1.5, 0.8]];
 const SLOTS: { wall: Wall; at: number }[] = [{ wall: "w", at: -1.8 }, { wall: "w", at: 1.3 }, { wall: "e", at: -1.8 }, { wall: "e", at: 1.3 }];
@@ -22,7 +22,8 @@ export function officeRoom(r: Rng, p: Plan): RoomDef<{}> {
   const num = deskNo[ringing];
   const answer = roomNo.indexOf(num);
   const shell = officeShell;
-  return {
+  const lock: DoorSpec = { wall: "n", at: r.pick([-1.5, 1.5]), label: "倉庫", style: "office" };
+  return finish({
     id: "office", kind: "sound", name: "深夜のオフィス", limit: 20 + Math.min(2, p.lv), shell, doors, answer,
     spec: { deskNo, isleNo, roomNo, ringing, screen, every },
     logic: {
@@ -31,7 +32,20 @@ export function officeRoom(r: Rng, p: Plan): RoomDef<{}> {
     },
     build(kit) { buildOffice(kit, { deskNo, isleNo, ringing, screen, every }); },
     solution: [{ at: 2.0, moveTo: nearDoor(shell, doors[answer]) }, { at: 4.0, door: answer }],
-  };
+  }, r, p, {
+    lock, earliest: 0,
+    hint: `鳴っているのは 机${num} の電話`,
+    items: () => [
+      ...DESKS.map(([x, z]): { pos: [number, number, number]; reach: [number, number] } => ({ pos: [x - 0.58, 0.762, z + 0.16], reach: [x - 0.58, z + 0.75] })),
+      { pos: [-3.25, 1.112, 0.25], reach: [-2.6, 0.25] },
+      { pos: [3.15, 1.022, -0.25], reach: [2.5, -0.25] },
+    ],
+    darks: [
+      { pos: [-3.492, 0.42, -3.0], rotY: Math.PI / 2, reach: [-2.7, -3.0] },
+      { pos: [3.492, 0.42, -3.0], rotY: -Math.PI / 2, reach: [2.7, -3.0] },
+      { pos: [3.492, 0.42, 2.4], rotY: -Math.PI / 2, reach: [2.7, 2.4] },
+    ],
+  });
 }
 
 const officeShell: RoomDef["shell"] = {

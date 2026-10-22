@@ -3,7 +3,7 @@ import * as THREE from "three";
 import type { DoorSpec, RoomDef } from "../core/types";
 import { nearDoor } from "../core/types";
 import { mannequin, place, woodChair } from "./props";
-import type { Plan, Rng } from "./common";
+import { finish, type Plan, type Rng } from "./common";
 
 type P2 = [number, number];
 /** 動きうる物：元の位置と、動いた先（lv0 の時の距離） */
@@ -25,7 +25,8 @@ export function basementRoom(r: Rng, p: Plan): RoomDef<{}> {
   const doors: DoorSpec[] = [-1.5, 0, 1.5].map((at, i) => ({ wall: "n", at, label: THINGS[order[i]].label, style: "metal" }));
   const answer = order.indexOf(mover);
   const shell = basementShell;
-  return {
+  const still = THINGS[order.find(i => i !== mover)!].label;
+  return finish({
     id: "basement", kind: "blackout", name: "地下倉庫", limit: 25, shell, doors, answer,
     spec: { darkFrom, order, mover, to, marks },
     logic: {
@@ -36,7 +37,20 @@ export function basementRoom(r: Rng, p: Plan): RoomDef<{}> {
     build(kit) { buildBasement(kit, { darkFrom, darkTo, mover, to, marks }); },
     solution: [{ at: darkTo + 0.6, moveTo: nearDoor(shell, doors[answer]) }, { at: darkTo + 1.5, door: answer }],
     wrongs: [[{ at: darkTo - 0.5, door: answer }]],
-  };
+  }, r, p, {
+    lock: { wall: "w", at: -1.8, label: "非常口", style: "metal" },
+    earliest: darkTo,
+    hint: `「${still}」は 動かない`,
+    items: () => [
+      { pos: [-2.2, 0.732, 1.75], reach: [-1.6, 1.75] },
+      { pos: [1.1, 0.01, 2.5], reach: [0.6, 2.2] },
+      { pos: [-0.7, 0.01, 2.7], reach: [-0.4, 2.2] },
+    ],
+    darks: [
+      { pos: [2.492, 0.4, -2.6], rotY: -Math.PI / 2, reach: [1.8, -2.6] },
+      { pos: [1.6, 0.4, 3.242], rotY: Math.PI, reach: [1.6, 2.5] },
+    ],
+  });
 }
 
 const basementShell: RoomDef["shell"] = {

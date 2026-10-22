@@ -15,6 +15,7 @@ export function playRoom(g: Game, actions: Action[], maxSec = 40): Outcome | nul
       const a = actions[ai++];
       if (a.moveTo) [px, pz] = a.moveTo;
       if (a.interact) g.interact(a.interact);
+      if (a.use) g.useItem();
       if (a.door != null) g.chooseDoor(a.door);
     }
     g.step(px, pz);

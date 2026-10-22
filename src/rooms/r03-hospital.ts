@@ -3,7 +3,7 @@ import * as THREE from "three";
 import type { DoorSpec, RoomDef } from "../core/types";
 import { nearDoor } from "../core/types";
 import { place, plant } from "./props";
-import { sample, type Plan, type Rng } from "./common";
+import { finish, sample, type Plan, type Rng } from "./common";
 
 const MOVE_LIMIT = 0.25;         // これ以上スタート地点から離れたら「動いた」
 
@@ -21,7 +21,7 @@ export function hospitalRoom(r: Rng, p: Plan): RoomDef<{ moved: boolean }> {
     [{ at: callAt - 0.8, door: answer }],
   ];
   if (decoyAt != null) wrongs.push([{ at: decoyAt + 0.3, moveTo: nearDoor(shell, doors[answer]) }, { at: callAt + 1.0, door: answer }]);
-  return {
+  return finish<{ moved: boolean }>({
     id: "hospital", kind: "wait", name: "夜間外来の待合室", limit: 20, shell, doors, answer,
     spec: { callAt, nums, called: answer, decoyAt },
     logic: {
@@ -38,7 +38,18 @@ export function hospitalRoom(r: Rng, p: Plan): RoomDef<{ moved: boolean }> {
     build(kit) { buildHospital(kit, { callAt, label, decoyAt }); },
     solution: [{ at: callAt + 0.6, moveTo: nearDoor(shell, doors[answer], 1.0) }, { at: callAt + 1.5, door: answer }],
     wrongs,
-  };
+  }, r, p, {
+    lock: { wall: "w", at: -1.9, label: "職員用", style: "hospital" },
+    earliest: callAt, stay: true,
+    hint: `呼ばれるのは 入って${callAt}秒後。それまで一歩も動くな`,
+    // 入口すぐ横の雑誌台は、その場から手が届く（拾っても動いたことにならない）
+    items: kind => kind === "memo" ? [{ pos: [0.95, 0.47, 2.95], reach: [0, 2.5] }] : [
+      { pos: [0.95, 0.47, 2.95], reach: [0.5, 2.5] },
+      { pos: [-1.9, 0.5, 0.0], reach: [-1.9, 0.6] },
+      { pos: [-2.6, 1.092, 2.6], reach: [-1.9, 2.6] },
+    ],
+    darks: [],
+  });
 }
 
 const hospitalShell: RoomDef["shell"] = {
@@ -105,6 +116,12 @@ function buildHospital(kit: Parameters<RoomDef["build"]>[0], o: { callAt: number
     kit.sound("fridge", [2.6, 0.5, 2.3]);
     kit.collider(2.2, 1.8, 3, 2.8);
     plant(kit, [2.6, 0, -2.9], 1.1); plant(kit, [-2.6, 0, -2.9], 1.1);
+    // 入口横の雑誌台
+    const rack = place(kit, [0.95, 0, 2.95]);
+    kit.box(0.5, 0.03, 0.4, desk, [0, 0.42, 0], { parent: rack });
+    for (const [x, z] of [[-0.22, -0.17], [0.22, -0.17], [-0.22, 0.17], [0.22, 0.17]]) kit.cyl(0.012, 0.012, 0.42, steel, [x, 0, z], { parent: rack });
+    for (let i = 0; i < 3; i++) kit.box(0.2, 0.006, 0.28, M.plain([0x8a3b2e, 0x2e5a8a, 0x6a6a3a][i], 0.7), [-0.12 + i * 0.05, 0.45 + i * 0.006, 0.02], { parent: rack, rotY: i * 0.2 - 0.2, cast: false });
+    kit.collider(0.68, 2.72, 1.22, 3.18);
     // 掲示板のポスター
     const poster = (x: number, lines: string[], col: string) => kit.sign({ w: 0.42, h: 0.56, lines, bg: "#f7f5ef", fg: col, font: "gothic", style: "paper", size: 0.16 }, [x, 1.55, -3.48], 0);
     poster(-0.93, ["手洗い", "うがい", "マスク"], "#1f6b3a");

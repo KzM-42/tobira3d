@@ -75,3 +75,17 @@ body:not(.touchdev) .controls.touch { display: none; }
 .btn.alt { background: transparent; color: var(--amber); border: 1px solid rgba(232,180,110,.6); box-shadow: 0 0 24px rgba(232,180,110,.12); letter-spacing: .25em; padding: 12px 26px 12px 30px; }
 .modes { margin: 0; font-size: 12px; line-height: 1.8; color: var(--dim); }
 @media (max-width: 420px) { .rec.four { grid-template-columns: repeat(2, 1fr); } }
+
+/* 持ち物・メモのヒント */
+#held { position: absolute; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; gap: .8em; align-items: baseline;
+  padding: .35em 1em; border: 1px solid rgba(232,180,110,.3); border-radius: 4px; background: rgba(0,0,0,.5); font-size: 14px; opacity: 0; transition: opacity .25s; white-space: nowrap; }
+#held.on { opacity: 1; }
+#held b { color: var(--amber); font-weight: 600; letter-spacing: .1em; }
+#held span { font-size: 11px; color: var(--dim); font-family: "Hiragino Sans", "Yu Gothic", sans-serif; }
+#hint { position: absolute; left: 50%; top: 26%; transform: translateX(-50%); max-width: 90vw; padding: .45em 1em; border-left: 2px solid var(--amber);
+  background: rgba(20,16,10,.72); color: #f0e6cf; font-size: clamp(13px, 1.7vw, 17px); opacity: 0; transition: opacity .4s; }
+#hint.on { opacity: 1; }
+.round.use { display: none; position: absolute; right: max(24px, env(safe-area-inset-right)); bottom: max(110px, calc(env(safe-area-inset-bottom) + 100px));
+  width: 64px; height: 64px; font-size: 15px; pointer-events: auto; }
+.touchdev.holding .round.use { display: block; }
+.playing-off .round.use, .playing-off #held, .playing-off #hint { display: none !important; }

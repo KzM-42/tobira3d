@@ -8,9 +8,10 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 
 const app = new App($<HTMLCanvasElement>("gl"), {
   crosshair: $("crosshair"), roomTag: $("roomTag"), failLine: $("failLine"), timer: $("timer"), toast: $("toast"),
+  held: $("held"), hint: $("hint"),
   onClear: ms => showClear(ms),
   onOver: room => showOver(room),
-  onPauseChange: p => { $("pause").hidden = !p; $("seedPause").textContent = String(app.game.seed); if (p) setTimeout(() => $("resumeBtn").focus(), 0); },
+  onPauseChange: p => { $("pause").hidden = !p; $("seedPause").textContent = String(app.game.seed); $("heatPause").textContent = String(app.game.heat); if (p) setTimeout(() => $("resumeBtn").focus(), 0); },
 }, makeRoom, { length: NORMAL_ROOMS }, $("stick"), $("knob"));
 
 if (app.input.touch) document.body.classList.add("touchdev");
@@ -123,6 +124,8 @@ $("againBtn").onclick = () => { titleSeed = rollSeed(); begin(); };
 $("toTitleBtn").onclick = showTitle;
 $("resumeBtn").onclick = () => app.setPaused(false);
 $("pauseBtn").onclick = () => app.setPaused(true);
+$("useBtn").addEventListener("touchstart", e => { e.preventDefault(); app.input.requestUse(); }, { passive: false });
+$("useBtn").onclick = () => app.input.requestUse();
 $("quitBtn").onclick = showTitle;
 // タブが隠れたらゲームを一時停止（音は AudioEngine 側でも止める）
 document.addEventListener("visibilitychange", () => { if (document.hidden) app.setPaused(true); }, sig);

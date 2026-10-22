@@ -3,7 +3,7 @@ import * as THREE from "three";
 import type { DoorSpec, RoomDef, Wall } from "../core/types";
 import { nearDoor } from "../core/types";
 import { painting, place, plant, sconce } from "./props";
-import { sideName, type Plan, type Rng } from "./common";
+import { finish, sideName, type Plan, type Rng } from "./common";
 
 /** 扉を置ける場所（廊下を左手前→奥→右手前の順） */
 const SLOTS: { wall: Wall; at: number }[] = [
@@ -27,11 +27,14 @@ export function hotelRoom(r: Rng, p: Plan): RoomDef<{}> {
   const unlit = p.lv >= 1 && r.chance(0.5);       // 「灯りの消えた扉へ」
   const lit = doors.map((_, i) => (i === answer) !== unlit);
   const decoys = DECOYS.slice(0, Math.min(2, p.lv)).map(([wall, at]) => ({ wall, at, on: !unlit }));
+  // 鍵の扉の上のランプは「正解でない扉」と同じ状態にしておく（言いつけに当てはまらない）
+  const lock: DoorSpec = { ...SLOTS[n === 4 ? side[1] : side[0]], label: "STAFF", style: "hotel" };
+  if (p.locked) decoys.push({ wall: lock.wall, at: lock.at, on: unlit });
   const label = doors[answer].label!;
   const shell = hotelShell;
   const word = unlit ? "灯りの消えた" : "灯りのともる";
   const goal = nearDoor(shell, doors[answer], 0.6);
-  return {
+  return finish({
     id: "hotel", kind: "light", name: "ホテルの廊下", limit: 15 + (n - 3) * 3, shell, doors, answer,
     spec: { unlit, lit, decoys, floor, first, slots },
     logic: {
@@ -52,7 +55,19 @@ export function hotelRoom(r: Rng, p: Plan): RoomDef<{}> {
       buildHotel(kit, word);
     },
     solution: [{ at: 2.0, moveTo: goal }, { at: 3.0, door: answer }],
-  };
+  }, r, p, {
+    lock, earliest: 0,
+    hint: `${unlit ? "灯りが消えている" : "灯りがともっている"}のは ${sideName(doors[answer].wall)}の壁の扉`,
+    items: () => [
+      { pos: [-1.08, 0.81, 0.85], reach: [-0.4, 0.85] },
+      { pos: [0.9, 0.78, 1.75], reach: [0.2, 1.2] },
+      { pos: [0.55, 0.01, 4.1], reach: [0.1, 3.7] },
+    ],
+    darks: [
+      { pos: [1.282, 0.42, 3.4], rotY: -Math.PI / 2, reach: [0.4, 3.4] },
+      { pos: [-1.282, 0.42, -0.3], rotY: Math.PI / 2, reach: [-0.4, -0.3] },
+    ],
+  });
 }
 
 const hotelShell: RoomDef["shell"] = {

@@ -59,13 +59,25 @@ export interface Action {
   moveTo?: [number, number];
   interact?: string;
   door?: number;
+  /** 持っている小物を使う（F キー） */
+  use?: boolean;
 }
 
 /** 部屋の種類（5種類を部品にして使い回す） */
 export type RoomKind = "light" | "sound" | "wait" | "count" | "blackout";
 
-/** 部屋を作るときの条件（シード・何番目か・難しさ） */
-export interface GenCtx { seed: number; index: number; heat: number }
+/** 小物：懐中電灯・鍵・メモ（同時に1つだけ持てる） */
+export type ItemKind = "torch" | "key" | "memo";
+export const ITEM_NAME: Record<ItemKind, string> = { torch: "懐中電灯", key: "鍵", memo: "メモ" };
+/** 部屋に落ちている小物 */
+export interface ItemSpot { kind: ItemKind; pos: [number, number, number] }
+/** 懐中電灯で照らすと手がかり（正解の扉の札）が見える暗がり。pos は壁の上の中心 */
+export interface DarkSpot { pos: [number, number, number]; rotY: number; text: string }
+/** 小物を使った別解（テストと自動再生用） */
+export interface Alt { item: ItemKind; actions: Action[] }
+
+/** 部屋を作るときの条件（シード・何番目か・紛らわしさ・持ち込んだ小物） */
+export interface GenCtx { seed: number; index: number; heat: number; carry?: ItemKind | null }
 /** 部屋の作り方：同じ GenCtx なら必ず同じ部屋 */
 export type RoomGen = (c: GenCtx) => RoomDef;
 
@@ -84,6 +96,15 @@ export interface RoomDef<S = any> {
   build(kit: Kit, state: () => S): void;
   solution: Action[];
   wrongs?: Action[][];
+  /** 落ちている小物（各部屋に1つ） */
+  items: ItemSpot[];
+  dark?: DarkSpot;
+  /** 鍵のかかった扉（doors の添字）。鍵で開けると、言いつけに関係なく次の部屋へ通じる */
+  locked?: number;
+  /** メモを使うと見えるヒント（1つ） */
+  hint: string;
+  /** 小物を使った別解 */
+  alts: Alt[];
 }
 
 /** 扉の開口部の床上の位置 */

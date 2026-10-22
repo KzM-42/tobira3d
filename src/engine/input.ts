@@ -4,6 +4,7 @@ export interface InputFrame {
   run: boolean;
   lookX: number; lookY: number; // このフレームの視点移動（ラジアン）
   interact: boolean;
+  use: boolean;               // 持ち物を使う（F / 使うボタン）
   tap: { x: number; y: number } | null; // スマホ：タップした画面位置（-1..1）
 }
 
@@ -14,6 +15,7 @@ export class Input {
   private keys = new Set<string>();
   private lookX = 0; private lookY = 0;
   private wantInteract = false;
+  private wantUse = false;
   private tapAt: { x: number; y: number } | null = null;
   private stick = { id: -1, ox: 0, oy: 0, x: 0, y: 0 };
   private look = { id: -1, lx: 0, ly: 0, sx: 0, sy: 0, t0: 0, moved: 0 };
@@ -27,6 +29,7 @@ export class Input {
       if (!this.enabled) return;
       this.keys.add(e.code);
       if (e.code === "KeyE" && !e.repeat) this.wantInteract = true;
+      if (e.code === "KeyF" && !e.repeat) this.wantUse = true;
       if (["Space", "ArrowUp", "ArrowDown"].includes(e.code)) e.preventDefault();
     }, sig);
     addEventListener("keyup", e => this.keys.delete(e.code), sig);
@@ -50,6 +53,9 @@ export class Input {
     el.addEventListener("touchend", e => this.onTouch(e, "end"), { passive: false, signal: this.ac.signal });
     el.addEventListener("touchcancel", e => this.onTouch(e, "end"), { passive: false, signal: this.ac.signal });
   }
+
+  /** 画面の「使う」ボタン */
+  requestUse() { if (this.enabled) this.wantUse = true; }
 
   dispose() { this.ac.abort(); this.unlock(); }
 
@@ -101,8 +107,8 @@ export class Input {
       if (m < 0.15) { mx = 0; mz = 0; }
       run = m > 0.92;
     }
-    const f: InputFrame = { mx, mz, run, lookX: this.lookX, lookY: this.lookY, interact: this.wantInteract, tap: this.tapAt };
-    this.lookX = 0; this.lookY = 0; this.wantInteract = false; this.tapAt = null;
+    const f: InputFrame = { mx, mz, run, lookX: this.lookX, lookY: this.lookY, interact: this.wantInteract, use: this.wantUse, tap: this.tapAt };
+    this.lookX = 0; this.lookY = 0; this.wantInteract = false; this.wantUse = false; this.tapAt = null;
     return f;
   }
 

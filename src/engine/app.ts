@@ -2,7 +2,8 @@
 import * as THREE from "three";
 import { Game, HZ, PASS, ENTER, BLACKOUT, type GameOpts, type RunMode } from "../core/game";
 import { loadRecords, saveRecords, type Records } from "../core/records";
-import { spawnOf, type Floor, type RoomDef, type RoomGen } from "../core/types";
+import { ITEM_NAME, spawnOf, type Floor, type RoomDef, type RoomGen } from "../core/types";
+import { Extras } from "./extras";
 import { View } from "./view";
 import { Materials } from "./materials";
 import { AudioEngine } from "./audio";
@@ -19,6 +20,7 @@ const angLerp = (a: number, b: number, t: number) => { let d = (b - a) % (Math.P
 
 export interface UI {
   crosshair: HTMLElement; roomTag: HTMLElement; failLine: HTMLElement; timer: HTMLElement; toast: HTMLElement;
+  held: HTMLElement; hint: HTMLElement;
   onClear(ms: number): void; onOver(room: number): void; onPauseChange(paused: boolean): void;
 }
 
@@ -33,6 +35,7 @@ export class App {
   readonly rec: Records = loadRecords();
   game: Game;
   kit: Kit | null = null;
+  extras: Extras | null = null;
   paused = false;
   running = false;
   qualitySetting: QualitySetting = "auto";
@@ -50,6 +53,7 @@ export class App {
   private failTimer = 0;
   private passDoor: DoorObj | null = null;
   private showcaseOn = false;
+  private toastTimer = 0;
 
   constructor(canvas: HTMLCanvasElement, private ui: UI, readonly gen: RoomGen, readonly opts: GameOpts, stick: HTMLElement, knob: HTMLElement) {
     this.view = new View(canvas);
@@ -68,7 +72,7 @@ export class App {
   /** 全部を片付ける（ホットリロード時に二重のループ・音・GPU資源を残さない） */
   destroy() {
     cancelAnimationFrame(this.raf);
-    clearTimeout(this.quietTimer);
+    clearTimeout(this.quietTimer); clearTimeout(this.toastTimer);
     this.running = false;
     this.kit?.dispose(); this.kit = null; this.mats.disposeOwned();
     this.input.dispose();
@@ -105,7 +109,8 @@ export class App {
     this.running = false; this.input.enabled = false; this.input.unlock();
     this.paused = false;
     this.game = new Game(this.gen, this.opts, this.rec, saveRecords);
-    this.kit?.dispose(); this.kit = null; this.mats.disposeOwned();
+    this.kit?.dispose(); this.kit = null; this.extras = null; this.mats.disposeOwned();
+    this.syncHeld();
     this.audio.setAmbient(false);
     this.audio.setRunning(false);
   }
@@ -114,6 +119,7 @@ export class App {
   showcase(seed: number) {
     this.game.seed = seed;
     this.loadRoom(this.game.room = this.game.roomAt(0));
+    this.extras!.setItems(this.game.room.items);
     this.kit!.entry.passage!.visible = false;
     this.kit!.silent = true;
     this.showcaseOn = true;
@@ -134,6 +140,7 @@ export class App {
     const kit = new Kit(def, this.mats, this.audio, this.view.quality);
     kit.buildShell();
     def.build(kit, () => this.game.s);
+    this.extras = new Extras(kit, def);
     this.view.scene.add(kit.group);
     kit.group.updateMatrixWorld(true);
     this.kit = kit;
@@ -151,6 +158,8 @@ export class App {
       switch (e.type) {
         case "enter":
           this.loadRoom(g.room);
+          this.extras!.setItems(g.items);
+          this.syncHeld(); this.ui.hint.classList.remove("on");
           this.passDoor = null;
           this.ui.roomTag.textContent = `第${e.room + 1}室　${g.room.name}`;
           this.tagTimer = 3.2;
@@ -170,6 +179,15 @@ export class App {
           break;
         }
         case "blackout": this.audio.play("pop"); this.fromBlack = true; break;
+        case "items": this.extras?.setItems(g.items); break;
+        case "held": this.syncHeld(); break;
+        case "msg": this.toast(e.text); break;
+        case "hint":
+          this.ui.hint.textContent = `メモ：${e.text}`; this.ui.hint.classList.add("on");
+          this.audio.play("tick");
+          break;
+        case "reveal": this.extras?.reveal(); this.audio.play("tick"); break;
+        case "unlock": this.extras?.unlock(); this.audio.play("buzz"); break;
         case "control": {
           const [sx, sz] = spawnOf(g.room.shell);
           this.player.place(sx, sz, 0);
@@ -207,6 +225,8 @@ export class App {
         }
         if (steps === 8) this.acc = 0;
         if (this.game.mode === "room") this.updateHover(inp.interact, inp.tap);
+        if (inp.use && this.game.mode === "room") { this.game.useItem(); this.handleEvents(); }
+        this.extras?.update(dt, this.view.camera);
       } else if (this.showcaseOn && this.kit) { this.roomTime += dt; this.kit.update(0, this.roomTime, dt); }
       this.updateCamera(this.acc / STEP);
       this.updateHud(dt);
@@ -337,6 +357,20 @@ export class App {
   }
 
   /* ---------------- HUD ---------------- */
+  private syncHeld() {
+    const h = this.running ? this.game.held : null;
+    this.ui.held.classList.toggle("on", !!h);
+    if (h) this.ui.held.innerHTML = `<b>${ITEM_NAME[h]}</b><span>${this.input.touch ? "使う をタップ" : "F で使う"}</span>`;
+    document.body.classList.toggle("holding", !!h);
+  }
+
+  toast(text: string, sec = 2.6) {
+    this.ui.toast.textContent = text;
+    this.ui.toast.classList.add("on");
+    clearTimeout(this.toastTimer);
+    this.toastTimer = window.setTimeout(() => this.ui.toast.classList.remove("on"), sec * 1000);
+  }
+
   private updateHud(dt: number) {
     const g = this.game;
     this.ui.crosshair.classList.toggle("hot", !!this.hover && g.mode === "room");
@@ -359,8 +393,7 @@ export class App {
     if (this.fps.low >= 2 && this.view.quality !== "low") {
       const next: Quality = this.view.quality === "high" ? "medium" : "low";
       this.applyQuality(next); this.fps.low = 0;
-      this.ui.toast.textContent = `動作が重いため 画質を「${next === "medium" ? "中" : "低"}」に下げました`;
-      this.ui.toast.classList.add("on"); setTimeout(() => this.ui.toast.classList.remove("on"), 2600);
+      this.toast(`動作が重いため 画質を「${next === "medium" ? "中" : "低"}」に下げました`);
     }
   }
 }
