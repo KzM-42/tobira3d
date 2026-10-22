@@ -220,17 +220,17 @@ export class AudioEngine {
   }
 
   /** 足音（床の素材で変わる）。足元の少し下・左右交互に鳴らす */
-  footstep(kind: Floor, pos: V3, run: boolean) {
+  footstep(kind: Floor, pos: V3) {
     if (!this.ctx || this.ctx.state !== "running") return;
     const n = this.stepN++, v = 0.85 + ((n * 7919) % 13) / 60, o = this.out({ x: pos.x, y: pos.y, z: pos.z }, 0.35);
-    const k = run ? 1.35 : 1, off = (n * 0.37) % 1.5;
+    const off = (n * 0.37) % 1.5;
     switch (kind) {
-      case "carpet": this.noise(o, 0.12, { type: "lowpass", freq: 520 * v, gain: 0.32 * k, attack: 0.012, offset: off }); this.osc(o, 70 * v, 0.08, { gain: 0.12 * k }); break;
-      case "tile": this.noise(o, 0.06, { freq: 3200 * v, q: 1.2, gain: 0.25 * k, offset: off }); this.osc(o, 190 * v, 0.06, { type: "triangle", gain: 0.12 * k }); this.noise(o, 0.1, { type: "lowpass", freq: 700, gain: 0.12 * k, offset: off }); break;
-      case "linoleum": this.noise(o, 0.07, { freq: 1900 * v, q: 0.9, gain: 0.22 * k, offset: off }); this.osc(o, 120 * v, 0.07, { gain: 0.14 * k }); if (n % 3 === 0) this.osc(o, 2400, 0.04, { gain: 0.03, when: 0.03 }); break;
-      case "tatami": this.noise(o, 0.16, { freq: 1500 * v, q: 0.5, gain: 0.13 * k, attack: 0.03, offset: off }); this.noise(o, 0.09, { type: "lowpass", freq: 300, gain: 0.12 * k, offset: off }); break;
-      case "concrete": this.noise(o, 0.09, { freq: 2400 * v, q: 0.7, gain: 0.26 * k, offset: off }); this.noise(o, 0.05, { type: "highpass", freq: 5000, gain: 0.08 * k, when: 0.01, offset: off }); this.osc(o, 85 * v, 0.1, { gain: 0.18 * k }); break;
-      case "wood": this.osc(o, 160 * v, 0.12, { type: "triangle", gain: 0.2 * k }); this.noise(o, 0.07, { freq: 1100 * v, q: 2, gain: 0.16 * k, offset: off }); if (n % 4 === 1) this.osc(o, 420, 0.25, { type: "sawtooth", to: 380, gain: 0.015, when: 0.05 }); break;
+      case "carpet": this.noise(o, 0.12, { type: "lowpass", freq: 520 * v, gain: 0.32, attack: 0.012, offset: off }); this.osc(o, 70 * v, 0.08, { gain: 0.12 }); break;
+      case "tile": this.noise(o, 0.06, { freq: 3200 * v, q: 1.2, gain: 0.25, offset: off }); this.osc(o, 190 * v, 0.06, { type: "triangle", gain: 0.12 }); this.noise(o, 0.1, { type: "lowpass", freq: 700, gain: 0.12, offset: off }); break;
+      case "linoleum": this.noise(o, 0.07, { freq: 1900 * v, q: 0.9, gain: 0.22, offset: off }); this.osc(o, 120 * v, 0.07, { gain: 0.14 }); if (n % 3 === 0) this.osc(o, 2400, 0.04, { gain: 0.03, when: 0.03 }); break;
+      case "tatami": this.noise(o, 0.16, { freq: 1500 * v, q: 0.5, gain: 0.13, attack: 0.03, offset: off }); this.noise(o, 0.09, { type: "lowpass", freq: 300, gain: 0.12, offset: off }); break;
+      case "concrete": this.noise(o, 0.09, { freq: 2400 * v, q: 0.7, gain: 0.26, offset: off }); this.noise(o, 0.05, { type: "highpass", freq: 5000, gain: 0.08, when: 0.01, offset: off }); this.osc(o, 85 * v, 0.1, { gain: 0.18 }); break;
+      case "wood": this.osc(o, 160 * v, 0.12, { type: "triangle", gain: 0.2 }); this.noise(o, 0.07, { freq: 1100 * v, q: 2, gain: 0.16, offset: off }); if (n % 4 === 1) this.osc(o, 420, 0.25, { type: "sawtooth", to: 380, gain: 0.015, when: 0.05 }); break;
     }
   }
 

@@ -1,7 +1,6 @@
-// 入力：PC は WASD + マウスのドラッグで視点（カーソルは固定しない）+ Shift + E/クリック。スマホは仮想スティック + 右側ドラッグ + タップ。
+// 入力：PC は WASD + マウスのドラッグで視点（カーソルは固定しない）+ E/クリック。スマホは仮想スティック + 右側ドラッグ + タップ。
 export interface InputFrame {
-  mx: number; mz: number;     // 移動（右, 前）-1..1
-  run: boolean;
+  mx: number; mz: number;     // 移動（右, 前）-1..1。向きだけを使う（速さは一定）
   lookX: number; lookY: number; // このフレームの視点移動（ラジアン）
   interact: boolean;
   use: boolean;               // 持ち物を使う（F / 使うボタン）
@@ -101,14 +100,11 @@ export class Input {
     const k = (c: string) => this.keys.has(c);
     let mx = (k("KeyD") || k("ArrowRight") ? 1 : 0) - (k("KeyA") || k("ArrowLeft") ? 1 : 0);
     let mz = (k("KeyW") || k("ArrowUp") ? 1 : 0) - (k("KeyS") || k("ArrowDown") ? 1 : 0);
-    let run = k("ShiftLeft") || k("ShiftRight");
     if (this.stick.id >= 0) {
       mx = this.stick.x; mz = -this.stick.y;
-      const m = Math.hypot(mx, mz);
-      if (m < 0.15) { mx = 0; mz = 0; }
-      run = m > 0.92;
+      if (Math.hypot(mx, mz) < 0.15) { mx = 0; mz = 0; }
     }
-    const f: InputFrame = { mx, mz, run, lookX: this.lookX, lookY: this.lookY, interact: this.wantInteract, use: this.wantUse, tap: this.tapAt };
+    const f: InputFrame = { mx, mz, lookX: this.lookX, lookY: this.lookY, interact: this.wantInteract, use: this.wantUse, tap: this.tapAt };
     this.lookX = 0; this.lookY = 0; this.wantInteract = false; this.wantUse = false; this.tapAt = null;
     return f;
   }

@@ -89,3 +89,11 @@ body:not(.touchdev) .controls.touch { display: none; }
   width: 64px; height: 64px; font-size: 15px; pointer-events: auto; }
 .touchdev.holding .round.use { display: block; }
 .playing-off .round.use, .playing-off #held, .playing-off #hint { display: none !important; }
+
+/* 画面の隅の操作の早見 */
+#keys { position: absolute; left: max(14px, env(safe-area-inset-left)); bottom: max(12px, env(safe-area-inset-bottom)); margin: 0;
+  font: 11px/1.4 "Hiragino Sans", "Yu Gothic", sans-serif; letter-spacing: .08em; color: rgba(236,228,210,.5); text-shadow: 0 0 4px #000; white-space: nowrap; }
+#keys .touch { display: none; }
+.touchdev #keys { bottom: auto; top: max(14px, env(safe-area-inset-top)); }
+.touchdev #keys .pc { display: none; }
+.touchdev #keys .touch { display: inline; }

@@ -60,7 +60,7 @@ export class App {
     this.mats = new Materials(this.view.renderer);
     this.input = new Input(canvas, stick, knob);
     this.game = new Game(gen, opts, this.rec, saveRecords);
-    this.player.onStep = run => this.footstep(run);
+    this.player.onStep = () => this.footstep();
     this.applyQuality();
     this.raf = requestAnimationFrame(this.frame);
   }
@@ -219,7 +219,7 @@ export class App {
         this.acc += dt;
         let steps = 0;
         while (this.acc >= STEP && steps < 8) {
-          this.fixedStep(inp.mx, inp.mz, inp.run);
+          this.fixedStep(inp.mx, inp.mz);
           this.acc -= STEP; steps++;
         }
         if (steps === 8) this.acc = 0;
@@ -236,9 +236,9 @@ export class App {
     this.view.render(this.time, this.running || this.kit ? dark : 0, this.exposureMul());
   };
 
-  private fixedStep(mx: number, mz: number, run: boolean) {
+  private fixedStep(mx: number, mz: number) {
     const g = this.game, p = this.player;
-    if (g.mode === "room" && this.kit) p.step(mx, mz, run, this.kit.colliders, STEP);
+    if (g.mode === "room" && this.kit) p.step(mx, mz, this.kit.colliders, STEP);
     g.step(p.x, p.z);
     this.handleEvents();
     if (!this.kit) return;
@@ -269,17 +269,17 @@ export class App {
   private walkBob(moving: boolean) {
     const p = this.player;
     p.bob += ((moving ? 1 : 0) - p.bob) * 0.15;
-    p.advance(moving ? 1.3 * STEP : 0, false);
+    p.advance(moving ? 1.3 * STEP : 0);
   }
 
-  private footstep(run: boolean) {
+  private footstep() {
     const cam = this.view.camera.position, g = this.game, kit = this.kit;
     if (!kit) return;
     let kind: Floor = kit.def.shell.footstep;
     if (g.mode === "passing" && g.pass!.k > 34) kind = "concrete";
     if (g.mode === "entering" && g.enterK < 30) kind = "concrete";
     if (g.mode === "room") for (const z of kit.footZones) if (inBox(this.player.x, this.player.z, z.box)) kind = z.kind;
-    this.audio.footstep(kind, { x: cam.x, y: cam.y - 1.45, z: cam.z }, run);
+    this.audio.footstep(kind, { x: cam.x, y: cam.y - 1.45, z: cam.z });
   }
 
   /** 扉の向こうの小部屋の座標（E座標）からワールドの姿勢へ */
