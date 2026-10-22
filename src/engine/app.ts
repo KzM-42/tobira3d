@@ -61,7 +61,6 @@ export class App {
     this.input = new Input(canvas, stick, knob);
     this.game = new Game(gen, opts, this.rec, saveRecords);
     this.player.onStep = run => this.footstep(run);
-    this.input.onLockChange = locked => { if (!locked && this.running && !this.input.touch) this.setPaused(true); };
     this.applyQuality();
     this.raf = requestAnimationFrame(this.frame);
   }
@@ -97,16 +96,15 @@ export class App {
     this.audio.setRunning(true);
     this.audio.setAmbient(true);   // 環境音はゲームを始めてから
     this.running = true; this.paused = false;
-    this.input.enabled = true;
+    this.input.enabled = true; this.input.flush();
     this.showcaseOn = false;
     this.game = new Game(this.gen, this.opts, this.rec, saveRecords);
     this.game.start(seed, run);
     this.handleEvents();
-    this.input.lock();
   }
 
   stop() {
-    this.running = false; this.input.enabled = false; this.input.unlock();
+    this.running = false; this.input.enabled = false;
     this.paused = false;
     this.game = new Game(this.gen, this.opts, this.rec, saveRecords);
     this.kit?.dispose(); this.kit = null; this.extras = null; this.mats.disposeOwned();
@@ -128,8 +126,9 @@ export class App {
   setPaused(p: boolean) {
     if (!this.running || this.paused === p) return;
     this.paused = p;
-    if (p) this.input.flush();
-    else { this.input.lock(); this.last = performance.now(); }
+    // 止める時も再開する時も、溜まった入力（ドラッグ中の視点移動・離したクリック）を捨てる
+    this.input.flush();
+    if (!p) this.last = performance.now();
     this.audio.setRunning(!p);
     this.ui.onPauseChange(p);
   }
@@ -198,7 +197,7 @@ export class App {
         }
         case "clear":
         case "over":
-          this.running = false; this.input.enabled = false; this.input.unlock();
+          this.running = false; this.input.enabled = false;
           this.audio.setAmbient(false);
           this.quietTimer = window.setTimeout(() => { if (!this.running) this.audio.setRunning(false); }, 2500);
           if (e.type === "clear") this.ui.onClear(e.ms);
