@@ -1,5 +1,7 @@
 # 扉は何も言わない（tobira3d）
 
+**遊ぶ：<https://kzm-42.github.io/tobira3d/>**（シードを指定するなら `?seed=12345` を付ける）
+
 一人称3Dの脱出ゲーム。部屋ごとに一つの言いつけに従い、正しい扉をくぐる。
 正誤は扉を通るまで分からない。手がかりと正解の扉はシードで毎回変わる。
 
@@ -14,8 +16,19 @@ npm run dev        # http://localhost:5173
 npm run build      # dist/ に静的ファイル（どこにでも置ける。base は相対パス）
 npm run preview    # build したものを確認
 npm test           # 全部屋の自動テスト（node）
+npm run deploy     # build して GitHub Pages（gh-pages ブランチ）に公開
 npm run textures   # テクスチャを Poly Haven から取り直す（同梱済みなので通常は不要）
 ```
+
+## 公開（GitHub Pages）
+
+`npm run deploy`（`scripts/deploy.sh`）の1コマンドで公開を更新する。
+
+1. `npm run build` で `dist/` を作る（vite の `base` は `./` なので、`/tobira3d/` の下でもそのまま動く）。
+2. 一時的な git worktree で `gh-pages` ブランチを開き、中身を `dist/` と `.nojekyll` に置き換える。main の作業ツリーと `.gitignore` には触れない。
+3. `main@<コミット>` という名前でコミットし、origin に push する。数十秒〜1分ほどで <https://kzm-42.github.io/tobira3d/> に反映される。
+
+Pages の公開元は「`gh-pages` ブランチのルート」（Settings → Pages）。
 
 ## 遊び方
 
