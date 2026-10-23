@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <meta name="theme-color" content="#050505" />
+  <meta name="description" content="扉は、正解を教えてくれない。一人称3Dの脱出ゲーム。" />
+  <title>扉は何も言わない</title>
+  <script type="module" crossorigin src="./assets/index-Deqacwh6.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-DVHHpcSX.css">
+</head>
+<body>
+  <canvas id="gl" aria-label="ゲーム画面"></canvas>
+
+  <div id="hud">
+    <div id="crosshair" class="hide"><i></i></div>
+    <div id="timer"></div>
+    <div id="roomTag"></div>
+    <div id="failLine"></div>
+    <div id="toast"></div>
+    <div id="hint"></div>
+    <p id="keys" aria-hidden="true"><span class="pc">WASD 移動 / ドラッグ 見回す / クリック 調べる</span><span class="touch">スティック 移動 / ドラッグ 見回す / タップ 調べる</span></p>
+    <div id="held"></div>
+    <button id="useBtn" class="round use" aria-label="持ち物を使う">使う</button>
+    <div id="stick"><div id="knob"></div></div>
+    <div class="hudbtns">
+      <button id="pauseBtn" class="round" aria-label="一時停止">II</button>
+      <button id="muteBtn" class="round" aria-label="ミュート切替">♪</button>
+    </div>
+  </div>
+
+  <section id="title" class="screen">
+    <div class="inner">
+      <p class="kicker">THE DOORS SAY NOTHING</p>
+      <h1>扉は<br />何も言わない</h1>
+      <p class="story">気がつくと、知らない建物の中にいた。<br />部屋ごとに一つ、言いつけがある。<br />扉は正解を教えてくれない。間違えれば、最初の部屋から。</p>
+      <div class="rec four">
+        <div><b id="recBest">—</b><span>最高到達</span></div>
+        <div><b id="recTime">—</b><span>最短踏破</span></div>
+        <div><b id="recEndless">—</b><span>無限 最高</span></div>
+        <div><b id="recTries">0</b><span>挑戦回数</span></div>
+      </div>
+      <div class="starts">
+        <button id="startBtn" class="btn" disabled>読み込み中…</button>
+        <button id="endlessBtn" class="btn alt" disabled>無限モード</button>
+      </div>
+      <p class="modes">はいる：第1〜5室を抜ければ外へ。失敗すると新しい部屋で第1室から<br />無限モード：部屋はどこまでも続く。一度でも間違えれば終わり</p>
+      <div class="opts">
+        <label>画質
+          <select id="quality">
+            <option value="auto">自動</option><option value="high">高</option><option value="medium">中</option><option value="low">低</option>
+          </select>
+        </label>
+        <button id="muteBtn2" class="ghost">音：あり</button>
+      </div>
+      <div class="vol">
+        <label><span>環境音</span><input type="range" min="0" max="100" step="5" data-vol="amb" aria-label="環境音の音量" /><output></output></label>
+        <label><span>効果音</span><input type="range" min="0" max="100" step="5" data-vol="sfx" aria-label="効果音の音量" /><output></output></label>
+      </div>
+      <p class="controls pc">WASD 移動 ／ ドラッグ 見回す ／ クリック 調べる（扉を開ける・拾う。E でも可） ／ F 持ち物を使う ／ Esc 一時停止</p>
+      <p class="controls touch">左下のスティック 移動 ／ 右側ドラッグ 見回す ／ タップ 調べる（扉を開ける・拾う） ／ 使う 持ち物を使う</p>
+      <p class="controls">小物は1つだけ持てる。懐中電灯は暗がりを照らし、鍵は鍵の扉を開け、メモはヒントを1つ見せる。<br />使えば楽になるが、使うほど 後の部屋は紛らわしくなる。</p>
+      <p class="seed">シード <b id="seedTitle">—</b><span id="endlessSeed"></span></p>
+      <p class="note">ヘッドホン推奨</p>
+    </div>
+  </section>
+
+  <section id="pause" class="screen" hidden>
+    <div class="inner">
+      <p class="kicker">PAUSED</p>
+      <h2>一時停止</h2>
+      <p class="seed">シード <b id="seedPause">—</b>　紛らわしさ <b id="heatPause">0</b></p>
+      <button id="resumeBtn" class="btn">続ける</button>
+      <div class="opts">
+        <label>画質
+          <select id="quality2">
+            <option value="auto">自動</option><option value="high">高</option><option value="medium">中</option><option value="low">低</option>
+          </select>
+        </label>
+        <button id="muteBtn3" class="ghost">音：あり</button>
+      </div>
+      <div class="vol">
+        <label><span>環境音</span><input type="range" min="0" max="100" step="5" data-vol="amb" aria-label="環境音の音量" /><output></output></label>
+        <label><span>効果音</span><input type="range" min="0" max="100" step="5" data-vol="sfx" aria-label="効果音の音量" /><output></output></label>
+      </div>
+      <button id="quitBtn" class="ghost">タイトルへ（この挑戦はやめる）</button>
+    </div>
+  </section>
+
+  <section id="clear" class="screen" hidden>
+    <div class="inner">
+      <p class="kicker" id="clearKicker">ESCAPED</p>
+      <h1 id="clearTitle">外に出た</h1>
+      <p class="story" id="clearStory"></p>
+      <div class="rec">
+        <div><b id="clrTime">—</b><span id="clrTimeL">今回</span></div>
+        <div><b id="clrBest">—</b><span id="clrBestL">最短</span></div>
+        <div><b id="clrTries">0</b><span id="clrTriesL">挑戦回数</span></div>
+      </div>
+      <button id="againBtn" class="btn">もう一度</button>
+      <button id="toTitleBtn" class="ghost">タイトルへ</button>
+    </div>
+  </section>
+
+  <noscript>JavaScript を有効にしてください。</noscript>
+</body>
+</html>
